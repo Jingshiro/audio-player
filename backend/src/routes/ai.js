@@ -1,6 +1,27 @@
 const express = require('express')
+const { spawn } = require('child_process')
 
 const router = express.Router()
+
+// 压缩音频：mono 16kHz 32kbps mp3，语音识别够用，体积降 90%+
+function compressAudio(inputBuffer) {
+  return new Promise((resolve, reject) => {
+    const ffmpeg = spawn('ffmpeg', [
+      '-i', 'pipe:0',
+      '-ac', '1',           // mono
+      '-ar', '16000',       // 16kHz sample rate
+      '-b:a', '32k',        // 32kbps bitrate
+      '-f', 'mp3',          // output mp3
+      'pipe:1'              // stdout
+    ])
+    const chunks = []
+    ffmpeg.stdout.on('data', (chunk) => chunks.push(chunk))
+    ffmpeg.stdout.on('end', () => resolve(Buffer.concat(chunks)))
+    ffmpeg.on('error', reject)
+    ffmpeg.stdin.write(inputBuffer)
+    ffmpeg.stdin.end()
+  })
+}
 
 // 判断 API 格式
 function detectFormat(baseUrl) {
@@ -50,18 +71,35 @@ router.post('/stt', async (req, res) => {
     return res.status(400).json({ error: 'baseUrl, apiKey, model, and audioBase64 are required' })
   }
 
+  // 音频压缩：mono 16kHz 32kbps，语音识别足够用
+  let compressedBase64 = audioBase64
+  let finalFormat = audioFormat
+  let compressedBuffer = null
+  try {
+    const rawBuffer = Buffer.from(audioBase64, 'base64')
+    compressedBuffer = await compressAudio(rawBuffer)
+    compressedBase64 = compressedBuffer.toString('base64')
+    finalFormat = 'mp3' // 压缩输出统一为 mp3
+    console.log('[AI/STT] 音频压缩: ' +
+      Math.round(rawBuffer.length / 1024) + 'KB → ' +
+      Math.round(compressedBuffer.length / 1024) + 'KB (' +
+      Math.round(compressedBuffer.length / rawBuffer.length * 100) + '%)')
+  } catch (e) {
+    console.log('[AI/STT] ⚠️ 压缩失败，使用原始文件:', e.message)
+  }
+
   const format = detectFormat(baseUrl)
   console.log('[AI/STT] 检测到 API 格式:', format)
 
   try {
     if (format === 'gemini') {
       // Gemini API 格式
-      const mimeType = getMimeType(audioFormat)
+      const mimeType = getMimeType(finalFormat)
       const geminiUrl = `${baseUrl}/models/${model}:generateContent?key=${apiKey}`
       const contents = [{
         parts: [
           { text: systemPrompt || 'Please transcribe this audio to LRC format lyrics with timestamps.' },
-          { inline_data: { mime_type: mimeType, data: audioBase64 } }
+          { inline_data: { mime_type: mimeType, data: compressedBase64 } }
         ]
       }]
 
@@ -117,8 +155,8 @@ router.post('/stt', async (req, res) => {
       res.json(result)
     } else if (format === 'whisper') {
       // Groq Whisper 转录 API（multipart/form-data 上传原始音频）
-      const mimeType = getMimeType(audioFormat)
-      const audioBuffer = Buffer.from(audioBase64, 'base64')
+      const mimeType = getMimeType(finalFormat)
+      const audioBuffer = compressedBuffer || Buffer.from(compressedBase64, 'base64')
       const cleanBaseUrl = baseUrl.replace(/\/+$/, '')
       const apiUrl = `${cleanBaseUrl}/audio/transcriptions`
 
@@ -130,7 +168,7 @@ router.post('/stt', async (req, res) => {
       const CRLF = '\r\n'
       const fileHeader = Buffer.from(
         `--${boundary}${CRLF}` +
-        `Content-Disposition: form-data; name="file"; filename="audio.${audioFormat}"${CRLF}` +
+        `Content-Disposition: form-data; name="file"; filename="audio.${finalFormat}"${CRLF}` +
         `Content-Type: ${mimeType}${CRLF}${CRLF}`
       )
       const modelPart = Buffer.from(
@@ -195,8 +233,8 @@ router.post('/stt', async (req, res) => {
           {
             type: 'input_audio',
             input_audio: {
-              data: audioBase64,
-              format: audioFormat || 'mp3'
+              data: compressedBase64,
+              format: finalFormat || 'mp3'
             }
           },
           {
