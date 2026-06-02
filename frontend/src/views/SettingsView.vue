@@ -85,9 +85,6 @@
           <button class="btn-secondary" @click="clearLocalAudio">
             清除本地音频
           </button>
-          <button class="btn-danger" @click="clearAllLocal">
-            清除所有本地数据
-          </button>
         </div>
       </div>
 
@@ -184,15 +181,6 @@ async function clearLocalAudio() {
     await unifiedLibraryStore.loadAll()
     await loadStorageStats()
     alert('本地音频已清除')
-  }
-}
-
-async function clearAllLocal() {
-  if (confirm('确定要清除所有本地数据吗？此操作不可恢复！')) {
-    localStorage.clear()
-    // 清空 IndexedDB
-    indexedDB.deleteDatabase('audio-player-db')
-    location.reload()
   }
 }
 
