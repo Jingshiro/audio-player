@@ -474,9 +474,26 @@ function saveTranslateLang(k, v) { localStorage.setItem(k, v) }
 function getLanguageName(c) { return { ja: '日语', en: '英语', ko: '韩语', zh: '中文' }[c] || c }
 async function saveResult() {
   if (!aiStore.generationResult) return
-  const n = selectedAudioId.value ? unifiedLibraryStore.audioFiles.find(a => a.id === selectedAudioId.value)?.name || '未知' : '未知'
   const type = lastGeneratedType.value || 'stt'
-  await unifiedSubtitlesStore.addSubtitle({ name: (type === 'translate' ? '[翻译]' : '[STT]') + '-' + n, content: aiStore.generationResult, source: type, audioId: selectedAudioId.value || null })
+
+  // 构建文件名基础
+  let baseName = '未知'
+  if (type === 'translate' && selectedSubtitleId.value) {
+    // 翻译：用来源台词名（去掉 [STT]- 前缀和后缀名）
+    const src = unifiedSubtitlesStore.getSubtitle(selectedSubtitleId.value)
+    if (src) baseName = src.name.replace(/^\[STT\]-/, '').replace(/\.[^.]+$/, '')
+  } else if (selectedAudioId.value) {
+    // STT 或翻译无来源台词：用音频名（去后缀）
+    const audio = unifiedLibraryStore.audioFiles.find(a => a.id === selectedAudioId.value)
+    if (audio) baseName = audio.name.replace(/\.[^.]+$/, '')
+  }
+  const prefix = type === 'translate' ? '[翻译]' : '[STT]'
+  await unifiedSubtitlesStore.addSubtitle({
+    name: prefix + '-' + baseName,
+    content: aiStore.generationResult,
+    source: type,
+    audioId: selectedAudioId.value || null
+  })
   alert('台词已保存')
 }
 function retryGeneration() { aiStore.clearResult(); startSTT() }
