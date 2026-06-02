@@ -8,6 +8,10 @@
         <div class="disc" :class="{ playing: playerStore.isPlaying }">
           <div class="disc-center"></div>
         </div>
+        <!-- 手机端碟片上的可点击提示图标 -->
+        <div class="disc-tap-hint">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 15h8v2H8v-2zm0-4h8v2H8v-2z"/></svg>
+        </div>
       </div>
 
       <!-- 音频信息 -->
@@ -169,6 +173,24 @@
       <!-- 隐藏的文件输入 -->
       <input type="file" ref="audioInputRef" accept="audio/*" style="display:none" @change="onAudioImport">
       <input type="file" ref="lrcInputRef" accept=".lrc,.txt" style="display:none" @change="onLrcImport">
+    </div>
+
+    <!-- 手机端歌词全屏迷你控制条 -->
+    <div class="lyrics-mini-bar" v-if="lyricsMode">
+      <div class="mini-track-info">
+        <div class="mini-track-name">{{ playerStore.currentTrack?.name || '未选择音频' }}</div>
+        <div class="mini-progress-bar">
+          <div class="mini-progress-fill" :style="{ width: playerStore.progress + '%' }"></div>
+        </div>
+      </div>
+      <button class="mini-play-btn" @click.stop="playerStore.togglePlay()">
+        <svg viewBox="0 0 24 24" v-if="!playerStore.isPlaying">
+          <path fill="currentColor" d="M8 5v14l11-7z"/>
+        </svg>
+        <svg viewBox="0 0 24 24" v-else>
+          <path fill="currentColor" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+        </svg>
+      </button>
     </div>
 
     <!-- 拖拽覆盖层 -->
@@ -1071,7 +1093,7 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .player-view {
-    padding-bottom: 70px;
+    padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
   }
 
   .player-left {
@@ -1118,12 +1140,38 @@ onMounted(() => {
     inset: 0;
     z-index: 100;
     background: var(--bg-primary, #111);
-    padding: 60px 16px 16px;
+    padding: 60px 16px 80px;
     min-height: 100vh;
+    min-height: 100dvh;
     overflow-y: auto;
+    animation: lyricsFadeIn 0.3s ease;
+  }
+  @keyframes lyricsFadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  /* 全屏模式隐藏编辑UI */
+  .lyrics-mode .lyrics-header {
+    display: none;
+  }
+  .lyrics-mode .import-area {
+    display: none;
   }
   .lyrics-mode .lyrics-container {
-    max-height: calc(100vh - 140px);
+    max-height: calc(100dvh - 140px);
+    mask-image: linear-gradient(180deg, black 0%, black 85%, transparent 100%);
+    -webkit-mask-image: linear-gradient(180deg, black 0%, black 85%, transparent 100%);
+  }
+  .lyrics-mode .lyrics-scroll {
+    padding: 30% 0;
+  }
+  .lyrics-mode .lyric-line {
+    padding: 16px 12px;
+    font-size: 1.05rem;
+  }
+  .lyrics-mode .lyric-content {
+    font-size: 1.05rem;
+    line-height: 1.6;
   }
   .lyrics-back-btn {
     display: flex;
@@ -1141,19 +1189,118 @@ onMounted(() => {
     color: var(--text-primary);
     cursor: pointer;
   }
-  .lyrics-mode .lyric-line {
-    padding: 14px 12px;
-    font-size: 1rem;
+  .lyrics-back-btn:active {
+    transform: scale(0.9);
+    background: rgba(255,255,255,0.15);
   }
-  .lyrics-mode .lyric-content {
-    font-size: 1rem;
-    line-height: 1.6;
+  /* 碟片可点击提示 */
+  .disc-tap-area {
+    position: relative;
+    cursor: pointer;
+  }
+  .disc-tap-hint {
+    display: none;
   }
 }
 
 /* 桌面端隐藏返回按钮和碟片点击提示 */
 .lyrics-back-btn { display: none; }
+.lyrics-mini-bar { display: none; }
+.disc-tap-hint { display: none; }
 @media (min-width: 769px) {
   .disc-tap-area { cursor: default; }
+}
+
+/* 手机端碟片点击提示 */
+@media (max-width: 768px) {
+  .disc-tap-hint {
+    display: flex;
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    width: 28px;
+    height: 28px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .disc-tap-hint svg {
+    width: 14px;
+    height: 14px;
+    fill: rgba(255,255,255,0.6);
+  }
+}
+
+/* 手机端歌词全屏迷你控制条 */
+.lyrics-mini-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 102;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  background: rgba(17, 17, 17, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  animation: lyricsFadeIn 0.3s ease;
+}
+
+.mini-track-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mini-track-name {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 6px;
+}
+
+.mini-progress-bar {
+  width: 100%;
+  height: 3px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+}
+
+.mini-progress-fill {
+  height: 100%;
+  background: var(--accent-gradient);
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+.mini-play-btn {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  background: var(--accent-gradient);
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: white;
+  box-shadow: 0 4px 15px var(--accent-glow);
+}
+
+.mini-play-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.mini-play-btn:active {
+  transform: scale(0.92);
 }
 </style>
