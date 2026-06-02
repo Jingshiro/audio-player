@@ -291,34 +291,13 @@ async function fetchModels() {
 
   isLoadingModels.value = true
   try {
-    const apiFormat = getApiFormat()
-    let url
-    let headers = {}
+    // 通过后端代理调用
+    const data = await aiApi.models({
+      baseUrl: aiStore.config.baseUrl,
+      apiKey: aiStore.config.apiKey
+    })
 
-    if (apiFormat === 'gemini') {
-      // Gemini API 格式
-      url = `${aiStore.config.baseUrl}/models?key=${aiStore.config.apiKey}`
-    } else {
-      // OpenAI / MiMo 格式
-      url = `${aiStore.config.baseUrl.replace(/\/$/, '')}/models`
-      headers = getAuthHeaders()
-    }
-
-    const response = await fetch(url, { headers })
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-
-    const data = await response.json()
-
-    if (apiFormat === 'gemini') {
-      // Gemini 返回格式: { models: [{ name: "models/xxx", ... }] }
-      availableModels.value = (data.models || []).map(m => ({ id: m.name.replace('models/', '') }))
-    } else {
-      // OpenAI 返回格式: { data: [{ id: "xxx", ... }] }
-      availableModels.value = data.data || []
-    }
+    availableModels.value = data.data || []
 
     if (availableModels.value.length > 0 && !availableModels.value.find(m => m.id === aiStore.config.model)) {
       aiStore.config.model = availableModels.value[0].id
@@ -417,133 +396,32 @@ async function startSTT() {
       new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
     )
     const fileName = audioData.originalName || 'audio.wav'
-    const mimeType = getAudioMimeType(fileName)
+    const audioFormat = fileName.split('.').pop() || 'mp3'
 
     // 构建 system prompt
-    let systemContent = '你是一个专业的语音转文字助手。请将音频内容转录为带有时间戳的 LRC 格式台词。'
+    let systemPrompt = '你是一个专业的语音转文字助手。请将音频内容转录为带有时间戳的 LRC 格式台词。'
     if (sttPrompt.value) {
-      systemContent = sttPrompt.value
+      systemPrompt = sttPrompt.value
     }
 
-    const userText = '请将这段音频转录为带有时间戳的 LRC 格式台词。每行格式为 [mm:ss.xx]台词内容。请确保时间戳准确，台词内容完整。'
-
-    const apiFormat = getApiFormat()
-    let requestBody
-    let apiUrl
-
-    if (apiFormat === 'gemini') {
-      // Gemini API 格式
-      const modelName = aiStore.config.model.startsWith('models/') ? aiStore.config.model : `models/${aiStore.config.model}`
-      apiUrl = `${aiStore.config.baseUrl}/${modelName}:generateContent`
-      requestBody = {
-        contents: [{
-          parts: [
-            { text: `${systemContent}\n\n${userText}` },
-            { inlineData: { mimeType, data: base64 } }
-          ]
-        }],
-        generationConfig: {
-          maxOutputTokens: 4096
-        }
-      }
-    } else {
-      // OpenAI / MiMo 格式
-      apiUrl = `${aiStore.config.baseUrl.replace(/\/$/, '')}/chat/completions`
-
-      let audioContent
-      if (apiFormat === 'mimo') {
-        // MiMo 格式：使用 data URL
-        const dataUrl = `data:${mimeType};base64,${base64}`
-        audioContent = { type: 'input_audio', input_audio: { data: dataUrl } }
-      } else {
-        // OpenAI 格式：使用 base64
-        audioContent = { type: 'input_audio', input_audio: { data: base64, format: 'wav' } }
-      }
-
-      requestBody = {
-        model: aiStore.config.model,
-        messages: [
-          { role: 'system', content: systemContent },
-          { role: 'user', content: [audioContent, { type: 'text', text: userText }] }
-        ],
-        stream: apiFormat !== 'mimo',
-        max_completion_tokens: 4096
-      }
-    }
-
-    // 发送请求
-    console.log('请求 URL:', apiUrl)
-    console.log('请求体:', JSON.stringify(requestBody, null, 2).replace(base64, '[BASE64_DATA]'))
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders()
-      },
-      body: JSON.stringify(requestBody)
+    // 通过后端代理调用
+    const result = await aiApi.stt({
+      baseUrl: aiStore.config.baseUrl,
+      apiKey: aiStore.config.apiKey,
+      model: aiStore.config.model,
+      audioBase64: base64,
+      audioFormat,
+      systemPrompt
     })
 
-    if (!response.ok) {
-      const errorData = await response.text()
-      throw new Error(`API 错误 ${response.status}: ${errorData}`)
+    if (result.content) {
+      aiStore.appendResult(result.content)
     }
-
-    if (apiFormat === 'gemini') {
-      // Gemini 非流式响应
-      const result = await response.json()
-      const content = result.candidates?.[0]?.content?.parts?.[0]?.text
-      if (content) {
-        aiStore.appendResult(content)
-      }
-      aiStore.stopGeneration()
-    } else if (apiFormat === 'mimo') {
-      // MiMo 非流式响应
-      const result = await response.json()
-      const content = result.choices?.[0]?.message?.content
-      if (content) {
-        aiStore.appendResult(content)
-      }
-      aiStore.stopGeneration()
-    } else {
-      // OpenAI 流式响应
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6)
-            if (data === '[DONE]') {
-              aiStore.stopGeneration()
-              return
-            }
-            try {
-              const parsed = JSON.parse(data)
-              const content = parsed.choices?.[0]?.delta?.content
-              if (content) {
-                aiStore.appendResult(content)
-              }
-            } catch (e) {
-              // 忽略解析错误
-            }
-          }
-        }
-      }
-      aiStore.stopGeneration()
-    }
-  } catch (error) {
-    console.error('STT 生成失败:', error)
     aiStore.stopGeneration()
-    alert('生成失败: ' + error.message)
+  } catch (error) {
+    console.error('STT 失败:', error)
+    aiStore.stopGeneration()
+    alert('STT 失败: ' + error.message)
   }
 }
 
@@ -558,107 +436,26 @@ async function startTranslate() {
 
   try {
     // 构建 system prompt
-    let systemContent = `你是一个专业的翻译助手。请将台词从${getLanguageName(translateFrom.value)}翻译为${getLanguageName(translateTo.value)}。保持 LRC 时间戳格式不变，只翻译台词内容。`
+    let systemPrompt = `你是一个专业的翻译助手。请将台词从${getLanguageName(translateFrom.value)}翻译为${getLanguageName(translateTo.value)}。保持 LRC 时间戳格式不变，只翻译台词内容。`
     if (translatePrompt.value) {
-      systemContent = translatePrompt.value
+      systemPrompt = translatePrompt.value
     }
 
-    const apiFormat = getApiFormat()
-    let requestBody
-    let apiUrl
-
-    if (apiFormat === 'gemini') {
-      // Gemini API 格式
-      const modelName = aiStore.config.model.startsWith('models/') ? aiStore.config.model : `models/${aiStore.config.model}`
-      apiUrl = `${aiStore.config.baseUrl}/${modelName}:generateContent`
-      requestBody = {
-        contents: [{
-          parts: [
-            { text: `${systemContent}\n\n${translateInput.value}` }
-          ]
-        }],
-        generationConfig: {
-          maxOutputTokens: 4096
-        }
-      }
-    } else {
-      // OpenAI / MiMo 格式
-      apiUrl = `${aiStore.config.baseUrl.replace(/\/$/, '')}/chat/completions`
-      requestBody = {
-        model: aiStore.config.model,
-        messages: [
-          { role: 'system', content: systemContent },
-          { role: 'user', content: translateInput.value }
-        ],
-        stream: apiFormat !== 'mimo'
-      }
-    }
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders()
-      },
-      body: JSON.stringify(requestBody)
+    // 通过后端代理调用
+    const result = await aiApi.translate({
+      baseUrl: aiStore.config.baseUrl,
+      apiKey: aiStore.config.apiKey,
+      model: aiStore.config.model,
+      text: translateInput.value,
+      targetLanguage: getLanguageName(translateTo.value),
+      systemPrompt,
+      stream: false
     })
 
-    if (!response.ok) {
-      const errorData = await response.text()
-      throw new Error(`API 错误 ${response.status}: ${errorData}`)
+    if (result.content) {
+      aiStore.appendResult(result.content)
     }
-
-    if (apiFormat === 'gemini') {
-      // Gemini 非流式响应
-      const result = await response.json()
-      const content = result.candidates?.[0]?.content?.parts?.[0]?.text
-      if (content) {
-        aiStore.appendResult(content)
-      }
-      aiStore.stopGeneration()
-    } else if (apiFormat === 'mimo') {
-      // MiMo 非流式响应
-      const result = await response.json()
-      const content = result.choices?.[0]?.message?.content
-      if (content) {
-        aiStore.appendResult(content)
-      }
-      aiStore.stopGeneration()
-    } else {
-      // OpenAI 流式响应
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6)
-            if (data === '[DONE]') {
-              aiStore.stopGeneration()
-              return
-            }
-            try {
-              const parsed = JSON.parse(data)
-              const content = parsed.choices?.[0]?.delta?.content
-              if (content) {
-                aiStore.appendResult(content)
-              }
-            } catch (e) {
-              // 忽略解析错误
-            }
-          }
-        }
-      }
-      aiStore.stopGeneration()
-    }
+    aiStore.stopGeneration()
   } catch (error) {
     console.error('翻译失败:', error)
     aiStore.stopGeneration()
