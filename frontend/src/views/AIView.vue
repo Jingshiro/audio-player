@@ -133,7 +133,7 @@
         <div class="tool-content">
           <div class="form-group">
             <label>源语言</label>
-            <select class="select" v-model="translateFrom">
+            <select class="select" v-model="translateFrom" @change="saveTranslateLang('translate_from', translateFrom)">
               <option value="ja">日语</option>
               <option value="en">英语</option>
               <option value="ko">韩语</option>
@@ -142,7 +142,7 @@
           </div>
           <div class="form-group">
             <label>目标语言</label>
-            <select class="select" v-model="translateTo">
+            <select class="select" v-model="translateTo" @change="saveTranslateLang('translate_to', translateTo)">
               <option value="zh">中文</option>
               <option value="en">英语</option>
               <option value="ja">日语</option>
@@ -277,8 +277,8 @@ const translatePrompt = ref(aiStore.translatePrompt)
 const selectedAudioId = ref('')
 
 // 翻译
-const translateFrom = ref('ja')
-const translateTo = ref('zh')
+const translateFrom = ref(localStorage.getItem('translate_from') || 'en')
+const translateTo = ref(localStorage.getItem('translate_to') || 'zh')
 const translateInput = ref('')
 const translateSource = ref('text') // 'text' 或 'file'
 const selectedSubtitleId = ref('')
@@ -677,6 +677,11 @@ async function deleteSubtitle(subtitleId) {
       translateInput.value = ''
     }
   }
+}
+
+// 保存翻译语言选择
+function saveTranslateLang(key, value) {
+  localStorage.setItem(key, value)
 }
 
 function getLanguageName(code) {
