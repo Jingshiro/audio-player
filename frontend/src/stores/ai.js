@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { settingsApi, getAuthToken } from '../api'
 
 export const useAIStore = defineStore('ai', () => {
   // 当前选择的预设 ID
@@ -21,12 +22,48 @@ export const useAIStore = defineStore('ai', () => {
   const generationProgress = ref(0)
   const generationResult = ref('')
 
+  // 是否已从服务器加载
+  let loadedFromServer = false
+
+  // 从服务器加载设置
+  async function loadFromServer() {
+    if (!getAuthToken()) return
+    try {
+      const settings = await settingsApi.get()
+      if (settings.ai_preset) selectedPreset.value = settings.ai_preset
+      if (settings.ai_base_url) config.value.baseUrl = settings.ai_base_url
+      if (settings.ai_api_key) config.value.apiKey = settings.ai_api_key
+      if (settings.ai_model) config.value.model = settings.ai_model
+      if (settings.stt_prompt !== undefined) sttPrompt.value = settings.stt_prompt
+      if (settings.translate_prompt !== undefined) translatePrompt.value = settings.translate_prompt
+      loadedFromServer = true
+    } catch (e) {
+      console.warn('从服务器加载设置失败:', e)
+    }
+  }
+
   // 保存配置
   function saveConfig() {
     localStorage.setItem('ai_preset', selectedPreset.value)
     localStorage.setItem('ai_base_url', config.value.baseUrl)
     localStorage.setItem('ai_api_key', config.value.apiKey)
     localStorage.setItem('ai_model', config.value.model)
+    syncToServer()
+  }
+
+  // 同步到服务器
+  async function syncToServer() {
+    if (!getAuthToken()) return
+    try {
+      await settingsApi.setBatch({
+        ai_preset: selectedPreset.value,
+        ai_base_url: config.value.baseUrl,
+        ai_api_key: config.value.apiKey,
+        ai_model: config.value.model
+      })
+    } catch (e) {
+      console.warn('同步设置到服务器失败:', e)
+    }
   }
 
   function updateConfig(newConfig) {
@@ -47,11 +84,13 @@ export const useAIStore = defineStore('ai', () => {
   function saveSTTPrompt(prompt) {
     sttPrompt.value = prompt
     localStorage.setItem('stt_prompt', prompt)
+    syncToServer()
   }
 
   function saveTranslatePrompt(prompt) {
     translatePrompt.value = prompt
     localStorage.setItem('translate_prompt', prompt)
+    syncToServer()
   }
 
   // 生成控制
@@ -87,6 +126,7 @@ export const useAIStore = defineStore('ai', () => {
     isGenerating,
     generationProgress,
     generationResult,
+    loadFromServer,
     saveConfig,
     updateConfig,
     setPreset,

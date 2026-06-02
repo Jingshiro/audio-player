@@ -9,6 +9,8 @@ const lyricsRoutes = require('./routes/lyrics')
 const folderRoutes = require('./routes/folder')
 const promptRoutes = require('./routes/prompt')
 const aiRoutes = require('./routes/ai')
+const authRoutes = require('./routes/auth')
+const settingsRoutes = require('./routes/settings')
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -26,6 +28,8 @@ const uploadDir = path.resolve(process.env.UPLOAD_DIR || './data')
 app.use('/data', express.static(uploadDir))
 
 // API Routes
+app.use('/api/auth', authRoutes)
+app.use('/api/settings', settingsRoutes)
 app.use('/api/audio', audioRoutes)
 app.use('/api/lyrics', lyricsRoutes)
 app.use('/api/folders', folderRoutes)
@@ -47,6 +51,7 @@ app.use((err, req, res, next) => {
 
 // Initialize database and start server
 initDatabase()
+authRoutes.initDefaultPassword()
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[Backend] Server running on http://0.0.0.0:${PORT}`)

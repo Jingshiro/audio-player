@@ -1,5 +1,21 @@
 const API_BASE = '/api'
 
+// Token 管理
+let authToken = localStorage.getItem('auth_token') || null
+
+export function setAuthToken(token) {
+  authToken = token
+  if (token) {
+    localStorage.setItem('auth_token', token)
+  } else {
+    localStorage.removeItem('auth_token')
+  }
+}
+
+export function getAuthToken() {
+  return authToken
+}
+
 // 检查后端是否可用
 export async function checkBackend() {
   try {
@@ -10,14 +26,28 @@ export async function checkBackend() {
   }
 }
 
+// 通用请求函数
 async function request(url, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers
+  }
+
+  // 自动带 token
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`
+  }
+
   const response = await fetch(`${API_BASE}${url}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers
-    },
-    ...options
+    ...options,
+    headers
   })
+
+  // 401 时清除 token
+  if (response.status === 401) {
+    setAuthToken(null)
+    throw new Error('未登录或登录已过期')
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }))
@@ -25,6 +55,47 @@ async function request(url, options = {}) {
   }
 
   return response.json()
+}
+
+// Auth API
+export const authApi = {
+  login(password) {
+    return request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ password })
+    })
+  },
+  logout() {
+    return request('/auth/logout', { method: 'POST' })
+  },
+  check() {
+    return request('/auth/check')
+  },
+  changePassword(oldPassword, newPassword) {
+    return request('/auth/password', {
+      method: 'PUT',
+      body: JSON.stringify({ oldPassword, newPassword })
+    })
+  }
+}
+
+// Settings API
+export const settingsApi = {
+  get() {
+    return request('/settings')
+  },
+  set(key, value) {
+    return request('/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ key, value })
+    })
+  },
+  setBatch(settings) {
+    return request('/settings/batch', {
+      method: 'PUT',
+      body: JSON.stringify({ settings })
+    })
+  }
 }
 
 // Audio API
@@ -37,8 +108,11 @@ export const audioApi = {
     return request(`/audio/${id}`)
   },
   upload(formData) {
+    const headers = {}
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`
     return fetch(`${API_BASE}/audio/upload`, {
       method: 'POST',
+      headers,
       body: formData
     }).then(r => r.json())
   },

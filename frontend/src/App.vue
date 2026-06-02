@@ -91,6 +91,28 @@
         <span>设置</span>
       </router-link>
     </nav>
+
+    <!-- 登录弹窗 -->
+    <div class="login-overlay" v-if="showLogin">
+      <div class="login-modal glass-card">
+        <div class="login-header">
+          <img src="/icon.png" alt="Logo" class="login-logo">
+          <h2>登录</h2>
+          <p>请输入密码访问全栈功能</p>
+        </div>
+        <form @submit.prevent="handleLogin">
+          <input type="password" class="input" v-model="loginPassword"
+            placeholder="密码" autofocus ref="loginInputRef">
+          <div class="login-error" v-if="loginError">{{ loginError }}</div>
+          <button type="submit" class="btn-primary login-btn" :disabled="isLogging">
+            {{ isLogging ? '登录中...' : '登录' }}
+          </button>
+        </form>
+        <div class="login-hint">
+          默认密码: admin
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -98,10 +120,20 @@
 import { ref, onMounted } from 'vue'
 import { usePlayerStore } from './stores/player'
 import { useLibraryStore } from './stores/library'
+import { useAIStore } from './stores/ai'
+import { checkBackend, authApi, setAuthToken, getAuthToken } from './api'
 
 const playerStore = usePlayerStore()
 const libraryStore = useLibraryStore()
+const aiStore = useAIStore()
 const audioRef = ref(null)
+
+// 登录状态
+const showLogin = ref(false)
+const loginPassword = ref('')
+const loginError = ref('')
+const isLogging = ref(false)
+const loginInputRef = ref(null)
 
 onMounted(async () => {
   if (audioRef.value) {
@@ -109,7 +141,40 @@ onMounted(async () => {
   }
   // 加载音频库
   await libraryStore.loadFromDB()
+
+  // 检测后端
+  const hasBackend = await checkBackend()
+  if (hasBackend) {
+    // 检查是否已登录
+    try {
+      const { authenticated } = await authApi.check()
+      if (!authenticated) {
+        showLogin.value = true
+      } else {
+        // 已登录，加载服务器设置
+        await aiStore.loadFromServer()
+      }
+    } catch {
+      showLogin.value = true
+    }
+  }
 })
+
+async function handleLogin() {
+  if (!loginPassword.value) return
+  isLogging.value = true
+  loginError.value = ''
+  try {
+    const { token } = await authApi.login(loginPassword.value)
+    setAuthToken(token)
+    showLogin.value = false
+    await aiStore.loadFromServer()
+  } catch (e) {
+    loginError.value = e.message || '登录失败'
+  } finally {
+    isLogging.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -355,5 +420,68 @@ onMounted(async () => {
   .copyright {
     display: none;
   }
+}
+
+/* 登录弹窗 */
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.login-modal {
+  width: 360px;
+  max-width: 90vw;
+  padding: 32px;
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.login-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  margin-bottom: 16px;
+}
+
+.login-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.login-header p {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.login-modal form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login-error {
+  color: var(--color-error);
+  font-size: 13px;
+  text-align: center;
+}
+
+.login-btn {
+  width: 100%;
+}
+
+.login-hint {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 16px;
 }
 </style>

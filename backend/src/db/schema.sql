@@ -1,5 +1,11 @@
 -- Audio Player Database Schema
 
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS folders (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
