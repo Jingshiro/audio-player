@@ -552,6 +552,12 @@ async function startSTT() {
 
     if (content) {
       aiStore.appendResult(content)
+    } else {
+      // 空内容：展示 AI 原始响应，方便诊断
+      const rawPreview = result._raw
+        ? JSON.stringify(result._raw, null, 2)
+        : JSON.stringify(result, null, 2)
+      aiStore.appendResult('[⚠️ AI 返回了空内容，原始响应如下：]\n\n' + rawPreview)
     }
     aiStore.stopGeneration()
   } catch (error) {

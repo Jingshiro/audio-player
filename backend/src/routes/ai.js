@@ -111,7 +111,9 @@ router.post('/stt', async (req, res) => {
       } else {
         console.log('[AI/STT] ⚠️ 内容为空！完整响应:', JSON.stringify(data).substring(0, 2000))
       }
-      res.json({ content })
+      const result = { content }
+      if (!content) result._raw = data  // 空内容时附带原始响应，方便前端诊断
+      res.json(result)
     } else {
       // OpenAI / MiMo 兼容格式
       const cleanBaseUrl = baseUrl.replace(/\/+$/, '')
@@ -180,7 +182,9 @@ router.post('/stt', async (req, res) => {
       } else {
         console.log('[AI/STT] ⚠️ 内容为空！完整响应:', JSON.stringify(data).substring(0, 1000))
       }
-      res.json({ content })
+      const result = { content }
+      if (!content) result._raw = data  // 空内容时附带原始响应
+      res.json(result)
     }
   } catch (err) {
     const elapsed = Date.now() - startTime
