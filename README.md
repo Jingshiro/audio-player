@@ -37,9 +37,9 @@ docker compose up -d
 
 ```
 
-### 2. 全栈模式（“我要囤积我的音声库”）
+### 2. 全栈模式（”我要囤积我的音声库”）
 
-带个 Node 后端，数据给你老老实实存着，重启不丢。
+带个 Node 后端，数据给你老老实实存着，重启不丢。首次访问需要登录。
 
 ```bash
 docker compose -f docker-compose.full.yml up -d
@@ -47,6 +47,8 @@ docker compose -f docker-compose.full.yml up -d
 # 接口: http://localhost:3000
 
 ```
+
+**登录**：全栈版首次打开会弹登录框，默认密码 `admin`。登录后 AI 设置（API Key 等）会同步到服务器，换浏览器也能用。
 
 ## 给想扔到服务器上的人
 
