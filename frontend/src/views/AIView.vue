@@ -1,59 +1,100 @@
 <template>
   <div class="ai-view">
-    <!-- AI 设置 -->
-    <div class="glass-card ai-settings">
-      <div class="section-title">AI 设置</div>
+    <!-- API 预设管理 -->
+    <div class="glass-card api-presets" v-if="aiStore.apiPresets.length > 0">
+      <div class="section-title">已保存的 API 预设</div>
+      <div class="preset-list">
+        <div v-for="preset in aiStore.apiPresets" :key="preset.id" class="preset-item">
+          <span class="preset-name">{{ preset.name }}</span>
+          <span class="preset-detail">{{ preset.baseUrl }}</span>
+          <span class="preset-detail">{{ preset.model }}</span>
+          <div class="preset-item-actions">
+            <button class="btn-sm btn-secondary" @click="applyPresetTo(preset, 'stt')">用于STT</button>
+            <button class="btn-sm btn-secondary" @click="applyPresetTo(preset, 'translate')">用于翻译</button>
+            <button class="btn-sm btn-danger" @click="deletePreset(preset.id)">删除</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
-      <!-- 模型预设选择 -->
+    <!-- STT 模型配置 -->
+    <div class="glass-card ai-settings">
+      <div class="section-title">STT 模型配置</div>
       <div class="form-group">
         <label>服务提供商</label>
         <div class="preset-selector">
           <button v-for="preset in modelPresets" :key="preset.id"
-            class="preset-btn"
-            :class="{ active: aiStore.selectedPreset === preset.id }"
-            @click="selectPreset(preset.id)">
-            {{ preset.name }}
-          </button>
+            class="preset-btn" :class="{ active: aiStore.sttPresetId === preset.id }"
+            @click="aiStore.selectProvider(preset.id, preset, 'stt')">{{ preset.name }}</button>
         </div>
       </div>
-
       <div class="settings-grid">
         <div class="form-group">
           <label>API地址</label>
-          <input type="text" class="input" v-model="aiStore.config.baseUrl"
-            :placeholder="currentPreset?.baseUrl || 'https://api.openai.com/v1'">
-          <span class="form-hint" v-if="aiStore.selectedPreset === 'custom'">以 /v1 结尾</span>
+          <input type="text" class="input" v-model="aiStore.sttConfig.baseUrl" placeholder="https://api.openai.com/v1">
         </div>
         <div class="form-group">
           <label>API密钥</label>
-          <input type="password" class="input" v-model="aiStore.config.apiKey"
-            placeholder="sk-...">
+          <input type="password" class="input" v-model="aiStore.sttConfig.apiKey" placeholder="sk-...">
         </div>
         <div class="form-group">
           <label>模型</label>
           <div class="model-select-row">
-            <template v-if="availableModels.length > 0">
-              <select class="select" v-model="aiStore.config.model">
-                <option value="" disabled>请选择模型</option>
-                <option v-for="model in availableModels" :key="model.id" :value="model.id">
-                  {{ model.id }}
-                </option>
-              </select>
-            </template>
-            <template v-else>
-              <input type="text" class="input" v-model="aiStore.config.model"
-                placeholder="请先拉取模型列表">
-            </template>
-            <button class="btn-secondary btn-sm" @click="fetchModels" :disabled="isLoadingModels">
-              <svg viewBox="0 0 24 24" width="16" height="16" :class="{ spinning: isLoadingModels }">
-                <path fill="currentColor" d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-              </svg>
-              {{ isLoadingModels ? '拉取中...' : '拉取模型列表' }}
+            <select class="select" v-model="aiStore.sttConfig.model" v-if="sttModels.length > 0">
+              <option value="" disabled>请选择模型</option>
+              <option v-for="m in sttModels" :key="m.id" :value="m.id">{{ m.id }}</option>
+            </select>
+            <input v-else type="text" class="input" v-model="aiStore.sttConfig.model" placeholder="输入模型名">
+            <button class="btn-secondary btn-sm" @click="fetchModels('stt')" :disabled="isLoadingSttModels">
+              {{ isLoadingSttModels ? '拉取中...' : '拉取' }}
             </button>
           </div>
         </div>
       </div>
-      <button class="btn-primary" @click="saveConfig">保存配置</button>
+      <div class="config-actions">
+        <button class="btn-primary" @click="aiStore.saveSectionConfig('stt')">保存</button>
+        <button class="btn-secondary" @click="saveAsApiPreset('stt')">另存预设</button>
+      </div>
+    </div>
+
+    <!-- 翻译模型配置 -->
+    <div class="glass-card ai-settings">
+      <div class="section-title">翻译模型配置</div>
+      <div class="form-group">
+        <label>服务提供商</label>
+        <div class="preset-selector">
+          <button v-for="preset in modelPresets" :key="preset.id"
+            class="preset-btn" :class="{ active: aiStore.translatePresetId === preset.id }"
+            @click="aiStore.selectProvider(preset.id, preset, 'translate')">{{ preset.name }}</button>
+        </div>
+      </div>
+      <div class="settings-grid">
+        <div class="form-group">
+          <label>API地址</label>
+          <input type="text" class="input" v-model="aiStore.translateConfig.baseUrl" placeholder="https://api.openai.com/v1">
+        </div>
+        <div class="form-group">
+          <label>API密钥</label>
+          <input type="password" class="input" v-model="aiStore.translateConfig.apiKey" placeholder="sk-...">
+        </div>
+        <div class="form-group">
+          <label>模型</label>
+          <div class="model-select-row">
+            <select class="select" v-model="aiStore.translateConfig.model" v-if="translateModels.length > 0">
+              <option value="" disabled>请选择模型</option>
+              <option v-for="m in translateModels" :key="m.id" :value="m.id">{{ m.id }}</option>
+            </select>
+            <input v-else type="text" class="input" v-model="aiStore.translateConfig.model" placeholder="输入模型名">
+            <button class="btn-secondary btn-sm" @click="fetchModels('translate')" :disabled="isLoadingTranslateModels">
+              {{ isLoadingTranslateModels ? '拉取中...' : '拉取' }}
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="config-actions">
+        <button class="btn-primary" @click="aiStore.saveSectionConfig('translate')">保存</button>
+        <button class="btn-secondary" @click="saveAsApiPreset('translate')">另存预设</button>
+      </div>
     </div>
 
     <!-- 破限词配置 -->
@@ -243,519 +284,197 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAIStore } from '../stores/ai'
 import { usePromptStore } from '../stores/prompt'
-import { useLibraryStore } from '../stores/library'
-import { useSubtitlesStore } from '../stores/subtitles'
 import { useUnifiedLibraryStore } from '../stores/unifiedLibrary'
 import { useUnifiedSubtitlesStore } from '../stores/unifiedSubtitles'
-import { MODEL_PRESETS, getPreset } from '../utils/modelPresets'
+import { MODEL_PRESETS } from '../utils/modelPresets'
 import { aiApi, checkBackend } from '../api'
 
 const aiStore = useAIStore()
 const promptStore = usePromptStore()
-const libraryStore = useLibraryStore()
-const subtitlesStore = useSubtitlesStore()
 const unifiedLibraryStore = useUnifiedLibraryStore()
 const unifiedSubtitlesStore = useUnifiedSubtitlesStore()
 
-// 检测后端是否可用
 const hasBackend = ref(false)
-onMounted(async () => {
-  hasBackend.value = await checkBackend()
-})
-
-// 模型预设列表
+onMounted(async () => { hasBackend.value = await checkBackend() })
 const modelPresets = Object.values(MODEL_PRESETS)
 
-// 当前选中的预设配置
-const currentPreset = computed(() => getPreset(aiStore.selectedPreset))
-
-// 破限词
 const sttPrompt = ref(aiStore.sttPrompt)
 const translatePrompt = ref(aiStore.translatePrompt)
-
-// STT - 从音频库选择
 const selectedAudioId = ref('')
-
-// 翻译
 const translateFrom = ref(localStorage.getItem('translate_from') || 'en')
 const translateTo = ref(localStorage.getItem('translate_to') || 'zh')
 const translateInput = ref('')
-const translateSource = ref('text') // 'text' 或 'file'
+const translateSource = ref('text')
 const selectedSubtitleId = ref('')
 const translateLrcInputRef = ref(null)
-
-// 破限词预设管理
 const showPresetManager = ref(false)
 const presetName = ref('')
 const selectedPresetId = ref('')
+const sttModels = ref([])
+const translateModels = ref([])
+const isLoadingSttModels = ref(false)
+const isLoadingTranslateModels = ref(false)
 
-// 模型列表（从 API 拉取的）
-const availableModels = ref([])
-const isLoadingModels = ref(false)
-
-// 选择服务商预设
-function selectPreset(presetId) {
-  const preset = getPreset(presetId)
-  aiStore.setPreset(presetId, {
-    baseUrl: preset.baseUrl,
-    defaultModel: preset.defaultModel
-  })
+function saveAsApiPreset(section) {
+  const cfg = section === 'stt' ? aiStore.sttConfig : aiStore.translateConfig
+  const name = prompt('预设名称：', '')
+  if (!name) return
+  aiStore.addApiPreset(name, cfg.baseUrl, cfg.apiKey, cfg.model)
 }
+function applyPresetTo(preset, section) { aiStore.applyApiPreset(preset, section) }
+function deletePreset(id) { if (confirm('确定删除？')) aiStore.deleteApiPreset(id) }
 
-// 加载音频库
-onMounted(async () => {
-  await unifiedLibraryStore.loadAll()
-  await unifiedSubtitlesStore.loadAll()
-})
-
-// 计算属性：本地和服务器音频
+onMounted(async () => { await unifiedLibraryStore.loadAll(); await unifiedSubtitlesStore.loadAll() })
 const localAudios = computed(() => unifiedLibraryStore.localAudios)
 const serverAudios = computed(() => unifiedLibraryStore.serverAudios)
-
-// 计算属性：本地和服务器台词
 const localSubtitles = computed(() => unifiedSubtitlesStore.localSubtitles)
 const serverSubtitles = computed(() => unifiedSubtitlesStore.serverSubtitles)
 
-async function fetchModels() {
-  if (!aiStore.config.apiKey || !aiStore.config.baseUrl) {
-    alert('请先填写 API 地址和密钥')
-    return
-  }
+function detectApiFormat(baseUrl) {
+  if (baseUrl.includes('generativelanguage.googleapis.com')) return 'gemini'
+  if (baseUrl.includes('groq.com')) return 'whisper'
+  return 'openai'
+}
+function buildAuthHeaders(apiKey, format) {
+  if (format === 'gemini') return { 'x-goog-api-key': apiKey }
+  return { 'Authorization': `Bearer ${apiKey}` }
+}
 
-  isLoadingModels.value = true
+async function fetchModels(section) {
+  const cfg = section === 'stt' ? aiStore.sttConfig : aiStore.translateConfig
+  const setLoading = section === 'stt' ? (v) => { isLoadingSttModels.value = v } : (v) => { isLoadingTranslateModels.value = v }
+  const setModels = section === 'stt' ? (v) => { sttModels.value = v } : (v) => { translateModels.value = v }
+  if (!cfg.apiKey || !cfg.baseUrl) { alert('请先填写 API 地址和密钥'); return }
+  setLoading(true)
   try {
     let models = []
-
     if (hasBackend.value) {
-      // 走后端代理
-      const data = await aiApi.models({
-        baseUrl: aiStore.config.baseUrl,
-        apiKey: aiStore.config.apiKey
-      })
+      const data = await aiApi.models({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey })
       models = data.data || []
     } else {
-      // 直接调用（纯前端模式）
-      const apiFormat = getApiFormat()
+      const format = detectApiFormat(cfg.baseUrl)
       let url, headers = {}
-
-      if (apiFormat === 'gemini') {
-        url = `${aiStore.config.baseUrl}/models?key=${aiStore.config.apiKey}`
-      } else {
-        url = `${aiStore.config.baseUrl.replace(/\/$/, '')}/models`
-        headers = getAuthHeaders()
-      }
-
-      const response = await fetch(url, { headers })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
-
-      if (apiFormat === 'gemini') {
-        models = (data.models || []).map(m => ({ id: m.name.replace('models/', '') }))
-      } else {
-        models = data.data || []
-      }
+      if (format === 'gemini') { url = `${cfg.baseUrl}/models?key=${cfg.apiKey}` }
+      else { url = `${cfg.baseUrl.replace(/\/$/, '')}/models`; headers = buildAuthHeaders(cfg.apiKey, format) }
+      const resp = await fetch(url, { headers })
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const data = await resp.json()
+      models = format === 'gemini' ? (data.models || []).map(m => ({ id: m.name.replace('models/', '') })) : (data.data || [])
     }
-
-    availableModels.value = models
-    if (models.length > 0 && !models.find(m => m.id === aiStore.config.model)) {
-      aiStore.config.model = models[0].id
-    }
-  } catch (error) {
-    console.error('拉取模型列表失败:', error)
-    alert('拉取模型列表失败: ' + error.message)
-  } finally {
-    isLoadingModels.value = false
-  }
+    setModels(models)
+    if (models.length > 0 && !models.find(m => m.id === cfg.model)) cfg.model = models[0].id
+  } catch (e) { console.error('拉取模型列表失败:', e); alert('拉取模型列表失败: ' + e.message) }
+  finally { setLoading(false) }
 }
 
-function saveConfig() {
-  aiStore.saveConfig()
-  alert('配置已保存')
-}
-
-function savePrompts() {
-  aiStore.saveSTTPrompt(sttPrompt.value)
-  aiStore.saveTranslatePrompt(translatePrompt.value)
-  alert('破限词已保存')
-}
-
-// 预设管理
-function loadPreset() {
+function savePrompts() { aiStore.saveSTTPrompt(sttPrompt.value); aiStore.saveTranslatePrompt(translatePrompt.value); alert('破限词已保存') }
+function loadPromptPreset() {
   if (!selectedPresetId.value) return
-  const preset = promptStore.getPreset(selectedPresetId.value)
-  if (preset) {
-    sttPrompt.value = preset.sttPrompt
-    translatePrompt.value = preset.translatePrompt
-    aiStore.saveSTTPrompt(preset.sttPrompt)
-    aiStore.saveTranslatePrompt(preset.translatePrompt)
-  }
+  const p = promptStore.getPreset(selectedPresetId.value)
+  if (p) { sttPrompt.value = p.sttPrompt; translatePrompt.value = p.translatePrompt; aiStore.saveSTTPrompt(p.sttPrompt); aiStore.saveTranslatePrompt(p.translatePrompt) }
 }
-
-function saveAsPreset() {
+function savePromptPreset() {
   if (!presetName.value) return
   promptStore.createPreset(presetName.value, sttPrompt.value, translatePrompt.value)
-  showPresetManager.value = false
-  presetName.value = ''
-  alert('预设已保存')
+  showPresetManager.value = false; presetName.value = ''; alert('预设已保存')
 }
 
-// 纯 JavaScript base64 编码（不依赖 btoa，避免二进制数据兼容性问题）
 function uint8ArrayToBase64(bytes) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-  const len = bytes.length
-  let result = ''
-  for (let i = 0; i < len; i += 3) {
-    const b1 = bytes[i]
-    const b2 = i + 1 < len ? bytes[i + 1] : 0
-    const b3 = i + 2 < len ? bytes[i + 2] : 0
-    result += chars[b1 >> 2]
-    result += chars[((b1 & 3) << 4) | (b2 >> 4)]
-    result += i + 1 < len ? chars[((b2 & 15) << 2) | (b3 >> 6)] : '='
-    result += i + 2 < len ? chars[b3 & 63] : '='
-  }
+  const len = bytes.length; let result = ''
+  for (let i = 0; i < len; i += 3) { const b1 = bytes[i], b2 = i + 1 < len ? bytes[i + 1] : 0, b3 = i + 2 < len ? bytes[i + 2] : 0; result += chars[b1 >> 2] + chars[((b1 & 3) << 4) | (b2 >> 4)] + (i + 1 < len ? chars[((b2 & 15) << 2) | (b3 >> 6)] : '=') + (i + 2 < len ? chars[b3 & 63] : '=') }
   return result
 }
 
-// STT - 真正调用 AI API
-
-// 获取当前 API 格式
-function getApiFormat() {
-  return currentPreset.value?.audioFormat || 'openai'
-}
-
-// 构建认证 headers
-function getAuthHeaders() {
-  const format = getApiFormat()
-  if (format === 'mimo') {
-    return { 'api-key': aiStore.config.apiKey }
-  }
-  if (format === 'gemini') {
-    return { 'x-goog-api-key': aiStore.config.apiKey }
-  }
-  return { 'Authorization': `Bearer ${aiStore.config.apiKey}` }
-}
-
-// 获取音频的 MIME 类型
-function getAudioMimeType(fileName) {
-  const ext = fileName.split('.').pop().toLowerCase()
-  const mimeMap = {
-    'mp3': 'audio/mpeg',
-    'wav': 'audio/wav',
-    'm4a': 'audio/mp4',
-    'ogg': 'audio/ogg',
-    'flac': 'audio/flac',
-    'aac': 'audio/aac',
-    'aiff': 'audio/aiff'
-  }
-  return mimeMap[ext] || 'audio/wav'
-}
-
 async function startSTT() {
-  if (!selectedAudioId.value || !aiStore.config.apiKey) {
-    alert('请先配置AI API密钥并选择音频文件')
-    return
-  }
-
+  const cfg = aiStore.sttConfig
+  if (!selectedAudioId.value || !cfg.apiKey) { alert('请先配置STT的API密钥并选择音频文件'); return }
   aiStore.startGeneration()
-
   try {
-    // 根据来源加载音频
-    console.log('[STT] 查找音频, selectedAudioId:', selectedAudioId.value)
-    console.log('[STT] 音频库总数:', unifiedLibraryStore.audioFiles.length)
     const audioItem = unifiedLibraryStore.audioFiles.find(a => a.id === selectedAudioId.value)
-    if (!audioItem) {
-      throw new Error(`未找到选中的音频文件（ID: ${selectedAudioId.value}），请刷新音频列表后重试`)
-    }
-    console.log('[STT] 找到音频:', audioItem.name, '来源:', audioItem.source)
+    if (!audioItem) throw new Error('未找到音频文件，请刷新列表')
     let fileBlob, fileName
-
     if (audioItem.source === 'local') {
-      // 本地音频：从 IndexedDB 加载
-      console.log('[STT] 从 IndexedDB 加载本地音频...')
-      const audioData = await unifiedLibraryStore.getAudioWithUrl(selectedAudioId.value)
-      if (!audioData || !audioData.fileBlob) {
-        throw new Error('无法加载本地音频文件（可能 IndexedDB 数据已丢失，请重新导入）')
-      }
-      fileBlob = audioData.fileBlob
-      fileName = audioData.originalName || 'audio.wav'
-      console.log('[STT] 本地音频加载成功, blob大小:', fileBlob.size)
+      const d = await unifiedLibraryStore.getAudioWithUrl(selectedAudioId.value)
+      if (!d?.fileBlob) throw new Error('无法加载本地音频')
+      fileBlob = d.fileBlob; fileName = d.originalName || 'audio.wav'
     } else {
-      // 服务器音频：下载后转 base64
-      console.log('[STT] 从服务器下载音频...')
       fileBlob = await unifiedLibraryStore.getAudioBlob(selectedAudioId.value)
-      if (!fileBlob) {
-        throw new Error('无法下载服务器音频（请确认服务器可访问）')
-      }
+      if (!fileBlob) throw new Error('无法下载服务器音频')
       fileName = audioItem.originalName || 'audio.wav'
-      console.log('[STT] 服务器音频下载成功, blob大小:', fileBlob.size)
     }
-
-    // 将音频转为 base64（手写编码，避免 btoa 对二进制数据的兼容性问题）
-    console.log('[STT] 开始转换音频为 base64...')
-    const arrayBuffer = await fileBlob.arrayBuffer()
-    const base64 = uint8ArrayToBase64(new Uint8Array(arrayBuffer))
-    console.log('[STT] base64转换完成, 长度:', base64.length)
+    const base64 = uint8ArrayToBase64(new Uint8Array(await fileBlob.arrayBuffer()))
     const audioFormat = fileName.split('.').pop() || 'mp3'
-
-    // 构建 system prompt
-    let systemPrompt = '你是一个专业的语音转文字助手。请将音频内容转录为带有时间戳的 LRC 格式台词。'
-    if (sttPrompt.value) {
-      systemPrompt = sttPrompt.value
-    }
+    let systemPrompt = sttPrompt.value || '你是一个专业的语音转文字助手。请将音频内容转录为带有时间戳的 LRC 格式台词。'
 
     let content = ''
-
     if (hasBackend.value) {
-      // 走后端代理
-      console.log('[STT] 走后端代理, hasBackend:', hasBackend.value, 'apiKey:', !!aiStore.config.apiKey)
-      const result = await aiApi.stt({
-        baseUrl: aiStore.config.baseUrl,
-        apiKey: aiStore.config.apiKey,
-        model: aiStore.config.model,
-        audioBase64: base64,
-        audioFormat,
-        systemPrompt
-      })
+      const result = await aiApi.stt({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.model, audioBase64: base64, audioFormat, systemPrompt })
       content = result.content || ''
     } else {
-      // 直接调用（纯前端模式）
-      const apiFormat = getApiFormat()
-      let requestBody, apiUrl
-
-      if (apiFormat === 'gemini') {
-        const modelName = aiStore.config.model.startsWith('models/') ? aiStore.config.model : `models/${aiStore.config.model}`
-        apiUrl = `${aiStore.config.baseUrl}/${modelName}:generateContent`
-        requestBody = {
-          contents: [{ parts: [
-            { text: `${systemPrompt}\n\n请将这段音频转录为带有时间戳的 LRC 格式台词。` },
-            { inlineData: { mimeType: `audio/${audioFormat}`, data: base64 } }
-          ] }]
-        }
+      const fmt = detectApiFormat(cfg.baseUrl)
+      let body, url
+      if (fmt === 'gemini') {
+        url = `${cfg.baseUrl}/models/${cfg.model}:generateContent`
+        body = JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }, { inline_data: { mime_type: `audio/${audioFormat}`, data: base64 } }] }] })
       } else {
-        apiUrl = `${aiStore.config.baseUrl.replace(/\/$/, '')}/chat/completions`
-        requestBody = {
-          model: aiStore.config.model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: [
-              { type: 'input_audio', input_audio: { data: base64, format: audioFormat } },
-              { type: 'text', text: '请将这段音频转录为带有时间戳的 LRC 格式台词。' }
-            ]}
-          ],
-          stream: false
-        }
+        url = `${cfg.baseUrl.replace(/\/$/, '')}/chat/completions`
+        body = JSON.stringify({ model: cfg.model, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: [{ type: 'input_audio', input_audio: { data: base64, format: audioFormat } }, { type: 'text', text: '请转录为 LRC 格式' }] }], stream: false })
       }
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify(requestBody)
-      })
-
-      if (!response.ok) throw new Error(`API 错误 ${response.status}`)
-      const result = await response.json()
-
-      if (apiFormat === 'gemini') {
-        content = result.candidates?.[0]?.content?.parts?.[0]?.text || ''
-      } else {
-        content = result.choices?.[0]?.message?.content || ''
-      }
+      const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(cfg.apiKey, fmt) }, body })
+      if (!resp.ok) throw new Error(`API 错误 ${resp.status}`)
+      const data = await resp.json()
+      content = fmt === 'gemini' ? (data.candidates?.[0]?.content?.parts?.[0]?.text || '') : (data.choices?.[0]?.message?.content || '')
     }
-
-    if (content) {
-      aiStore.appendResult(content)
-    } else {
-      // 空内容：展示 AI 原始响应，方便诊断
-      const rawPreview = result._raw
-        ? JSON.stringify(result._raw, null, 2)
-        : JSON.stringify(result, null, 2)
-      aiStore.appendResult('[⚠️ AI 返回了空内容，原始响应如下：]\n\n' + rawPreview)
-    }
+    if (content) aiStore.appendResult(content)
+    else aiStore.appendResult('[⚠️ 空内容]\n' + JSON.stringify(result?._raw || result || {}, null, 2))
     aiStore.stopGeneration()
-  } catch (error) {
-    console.error('STT 失败:', error)
-    aiStore.stopGeneration()
-    alert('STT 失败: ' + error.message)
-  }
+  } catch (e) { console.error('STT 失败:', e); aiStore.stopGeneration(); alert('STT 失败: ' + e.message) }
 }
 
-// 翻译 - 真正调用 AI API
 async function startTranslate() {
-  if (!translateInput.value || !aiStore.config.apiKey) {
-    alert('请先配置AI API密钥并输入台词')
-    return
-  }
-
+  const cfg = aiStore.translateConfig
+  if (!translateInput.value || !cfg.apiKey) { alert('请先配置翻译API密钥并输入台词'); return }
   aiStore.startGeneration()
-
   try {
-    // 构建 system prompt
-    let systemPrompt = `你是一个专业的翻译助手。请将台词从${getLanguageName(translateFrom.value)}翻译为${getLanguageName(translateTo.value)}。保持 LRC 时间戳格式不变，只翻译台词内容。`
-    if (translatePrompt.value) {
-      systemPrompt = translatePrompt.value
-    }
-
+    let sp = translatePrompt.value || `翻译为${getLanguageName(translateTo.value)}，保持LRC格式`
     let content = ''
-
     if (hasBackend.value) {
-      // 走后端代理
-      const result = await aiApi.translate({
-        baseUrl: aiStore.config.baseUrl,
-        apiKey: aiStore.config.apiKey,
-        model: aiStore.config.model,
-        text: translateInput.value,
-        targetLanguage: getLanguageName(translateTo.value),
-        systemPrompt,
-        stream: false
-      })
-      content = result.content || ''
+      const r = await aiApi.translate({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.model, text: translateInput.value, targetLanguage: getLanguageName(translateTo.value), systemPrompt: sp, stream: false })
+      content = r.content || ''
     } else {
-      // 直接调用（纯前端模式）
-      const apiFormat = getApiFormat()
-      let requestBody, apiUrl
-
-      if (apiFormat === 'gemini') {
-        const modelName = aiStore.config.model.startsWith('models/') ? aiStore.config.model : `models/${aiStore.config.model}`
-        apiUrl = `${aiStore.config.baseUrl}/${modelName}:generateContent`
-        requestBody = {
-          contents: [{ parts: [
-            { text: `${systemPrompt}\n\n${translateInput.value}` }
-          ] }]
-        }
-      } else {
-        apiUrl = `${aiStore.config.baseUrl.replace(/\/$/, '')}/chat/completions`
-        requestBody = {
-          model: aiStore.config.model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: translateInput.value }
-          ],
-          stream: false
-        }
-      }
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify(requestBody)
-      })
-
-      if (!response.ok) throw new Error(`API 错误 ${response.status}`)
-      const result = await response.json()
-
-      if (apiFormat === 'gemini') {
-        content = result.candidates?.[0]?.content?.parts?.[0]?.text || ''
-      } else {
-        content = result.choices?.[0]?.message?.content || ''
-      }
+      const fmt = detectApiFormat(cfg.baseUrl)
+      let body, url
+      if (fmt === 'gemini') { url = `${cfg.baseUrl}/models/${cfg.model}:generateContent`; body = JSON.stringify({ contents: [{ parts: [{ text: `${sp}\n\n${translateInput.value}` }] }] }) }
+      else { url = `${cfg.baseUrl.replace(/\/$/, '')}/chat/completions`; body = JSON.stringify({ model: cfg.model, messages: [{ role: 'system', content: sp }, { role: 'user', content: translateInput.value }], stream: false }) }
+      const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(cfg.apiKey, fmt) }, body })
+      if (!resp.ok) throw new Error(`API 错误 ${resp.status}`)
+      const data = await resp.json()
+      content = fmt === 'gemini' ? (data.candidates?.[0]?.content?.parts?.[0]?.text || '') : (data.choices?.[0]?.message?.content || '')
     }
-
-    if (content) {
-      aiStore.appendResult(content)
-    }
+    if (content) aiStore.appendResult(content)
     aiStore.stopGeneration()
-  } catch (error) {
-    console.error('翻译失败:', error)
-    aiStore.stopGeneration()
-    alert('翻译失败: ' + error.message)
-  }
+  } catch (e) { console.error('翻译失败:', e); aiStore.stopGeneration(); alert('翻译失败: ' + e.message) }
 }
 
-// 从台词库选择
-function onSubtitleSelect() {
-  if (!selectedSubtitleId.value) {
-    translateInput.value = ''
-    return
-  }
-  const sub = unifiedSubtitlesStore.getSubtitle(selectedSubtitleId.value)
-  if (sub) {
-    translateInput.value = sub.content
-  }
-}
-
-// 导入 LRC 文件到台词库
-function triggerTranslateLrcImport() {
-  translateLrcInputRef.value?.click()
-}
-
-function onTranslateLrcSelect(e) {
-  const file = e.target.files[0]
-  if (file) importLrcToSubtitles(file)
-  e.target.value = ''
-}
-
+function onSubtitleSelect() { const s = unifiedSubtitlesStore.getSubtitle(selectedSubtitleId.value); translateInput.value = s?.content || '' }
+function triggerTranslateLrcImport() { translateLrcInputRef.value?.click() }
+function onTranslateLrcSelect(e) { const f = e.target.files[0]; if (f) importLrcToSubtitles(f); e.target.value = '' }
 async function importLrcToSubtitles(file) {
-  try {
-    const text = await file.text()
-    const name = file.name.replace(/\.[^/.]+$/, '')
-    const sub = await unifiedSubtitlesStore.addSubtitle({
-      name,
-      content: text,
-      source: 'import'
-    })
-    // 自动选中刚导入的
-    selectedSubtitleId.value = sub.id
-    translateInput.value = sub.content
-  } catch (err) {
-    console.error('导入失败:', err)
-    alert('导入失败: ' + err.message)
-  }
+  try { const t = await file.text(); const s = await unifiedSubtitlesStore.addSubtitle({ name: file.name.replace(/\.[^/.]+$/, ''), content: t, source: 'import' }); selectedSubtitleId.value = s.id; translateInput.value = s.content }
+  catch (e) { alert('导入失败: ' + e.message) }
 }
-
-// 删除台词
-async function deleteSubtitle(subtitleId) {
-  if (confirm('确定要删除这个台词吗？')) {
-    await unifiedSubtitlesStore.deleteSubtitle(subtitleId)
-    if (selectedSubtitleId.value === subtitleId) {
-      selectedSubtitleId.value = ''
-      translateInput.value = ''
-    }
-  }
-}
-
-// 保存翻译语言选择
-function saveTranslateLang(key, value) {
-  localStorage.setItem(key, value)
-}
-
-function getLanguageName(code) {
-  const names = { ja: '日语', en: '英语', ko: '韩语', zh: '中文' }
-  return names[code] || code
-}
-
+async function deleteSubtitle(id) { if (confirm('确定删除？')) { await unifiedSubtitlesStore.deleteSubtitle(id); if (selectedSubtitleId.value === id) { selectedSubtitleId.value = ''; translateInput.value = '' } } }
+function saveTranslateLang(k, v) { localStorage.setItem(k, v) }
+function getLanguageName(c) { return { ja: '日语', en: '英语', ko: '韩语', zh: '中文' }[c] || c }
 async function saveResult() {
-  const content = aiStore.generationResult
-  if (!content) return
-
-  // 获取音频名称用于命名
-  const audioName = selectedAudioId.value
-    ? unifiedLibraryStore.audioFiles.find(a => a.id === selectedAudioId.value)?.name || '未知'
-    : '未知'
-
-  // 根据当前操作判断来源
-  const source = translateInput.value ? 'translate' : 'stt'
-  const prefix = source === 'stt' ? '[STT]' : '[翻译]'
-  const subtitleName = `${prefix}-${audioName}`
-
-  // 保存到台词库
-  await unifiedSubtitlesStore.addSubtitle({
-    name: subtitleName,
-    content,
-    source,
-    audioId: selectedAudioId.value || null
-  })
-
+  if (!aiStore.generationResult) return
+  const n = selectedAudioId.value ? unifiedLibraryStore.audioFiles.find(a => a.id === selectedAudioId.value)?.name || '未知' : '未知'
+  await unifiedSubtitlesStore.addSubtitle({ name: (translateInput.value ? '[翻译]' : '[STT]') + '-' + n, content: aiStore.generationResult, source: translateInput.value ? 'translate' : 'stt', audioId: selectedAudioId.value || null })
   alert('台词已保存')
 }
-
-function retryGeneration() {
-  aiStore.clearResult()
-  startSTT()
-}
-
-function discardResult() {
-  aiStore.clearResult()
-}
+function retryGeneration() { aiStore.clearResult(); startSTT() }
+function discardResult() { aiStore.clearResult() }
 </script>
 
 <style scoped>
