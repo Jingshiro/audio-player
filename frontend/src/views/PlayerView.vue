@@ -1,9 +1,10 @@
 <template>
-  <div class="player-view" @dragover.prevent="onDragOver" @dragleave="onDragLeave" @drop.prevent="onDrop">
+  <div class="player-view" :class="{ 'lyrics-mode': lyricsMode }"
+    @dragover.prevent="onDragOver" @dragleave="onDragLeave" @drop.prevent="onDrop">
     <!-- 左侧信息区 -->
     <div class="player-left">
-      <!-- 封面/唱片 -->
-      <div class="disc-container">
+      <!-- 封面/唱片（手机端点击切换歌词全屏） -->
+      <div class="disc-container disc-tap-area" @click="toggleLyricsMode">
         <div class="disc" :class="{ playing: playerStore.isPlaying }">
           <div class="disc-center"></div>
         </div>
@@ -65,6 +66,11 @@
 
     <!-- 右侧台词区 -->
     <div class="player-right">
+      <!-- 手机端歌词模式下的返回按钮 -->
+      <button class="lyrics-back-btn" @click="toggleLyricsMode">
+        <svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+      </button>
+
       <!-- 台词选择器 -->
       <div class="lyrics-header">
         <span>台词</span>
@@ -205,6 +211,10 @@ const isDragOver = ref(false)
 
 // 台词选择
 const selectedLyricId = ref('')
+
+// 手机端歌词全屏模式
+const lyricsMode = ref(false)
+function toggleLyricsMode() { lyricsMode.value = !lyricsMode.value }
 
 // 当前音频 ID
 const currentAudioId = computed(() => playerStore.currentTrack?.id || null)
@@ -1098,5 +1108,52 @@ onMounted(() => {
     font-size: 11px;
     min-width: 50px;
   }
+
+  /* 手机端歌词全屏模式 */
+  .lyrics-mode .player-left {
+    display: none;
+  }
+  .lyrics-mode .player-right {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: var(--bg-primary, #111);
+    padding: 60px 16px 16px;
+    min-height: 100vh;
+    overflow-y: auto;
+  }
+  .lyrics-mode .lyrics-container {
+    max-height: calc(100vh - 140px);
+  }
+  .lyrics-back-btn {
+    display: flex;
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 101;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--border-color, #333);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .lyrics-mode .lyric-line {
+    padding: 14px 12px;
+    font-size: 1rem;
+  }
+  .lyrics-mode .lyric-content {
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+}
+
+/* 桌面端隐藏返回按钮和碟片点击提示 */
+.lyrics-back-btn { display: none; }
+@media (min-width: 769px) {
+  .disc-tap-area { cursor: default; }
 }
 </style>
