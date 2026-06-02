@@ -501,8 +501,7 @@ async function startSTT() {
           contents: [{ parts: [
             { text: `${systemPrompt}\n\n请将这段音频转录为带有时间戳的 LRC 格式台词。` },
             { inlineData: { mimeType: `audio/${audioFormat}`, data: base64 } }
-          ] }],
-          generationConfig: { maxOutputTokens: 4096 }
+          ] }]
         }
       } else {
         apiUrl = `${aiStore.config.baseUrl.replace(/\/$/, '')}/chat/completions`
@@ -515,8 +514,7 @@ async function startSTT() {
               { type: 'text', text: '请将这段音频转录为带有时间戳的 LRC 格式台词。' }
             ]}
           ],
-          stream: false,
-          max_completion_tokens: 4096
+          stream: false
         }
       }
 
@@ -588,8 +586,7 @@ async function startTranslate() {
         requestBody = {
           contents: [{ parts: [
             { text: `${systemPrompt}\n\n${translateInput.value}` }
-          ] }],
-          generationConfig: { maxOutputTokens: 4096 }
+          ] }]
         }
       } else {
         apiUrl = `${aiStore.config.baseUrl.replace(/\/$/, '')}/chat/completions`
