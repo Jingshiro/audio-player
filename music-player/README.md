@@ -59,7 +59,7 @@ docker compose -f docker-compose.full.yml up -d
 直接拉取运行的：
 
 ```bash
-# 先建好存数据的地方，免得容器一重启你的老婆们全没了
+# 先建好存数据的地方，免得容器一重启你的宝贝们全没了
 mkdir -p data/audio data/lyrics
 
 # 跑起来
