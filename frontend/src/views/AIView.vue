@@ -399,6 +399,23 @@ function saveAsPreset() {
   alert('预设已保存')
 }
 
+// 纯 JavaScript base64 编码（不依赖 btoa，避免二进制数据兼容性问题）
+function uint8ArrayToBase64(bytes) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  const len = bytes.length
+  let result = ''
+  for (let i = 0; i < len; i += 3) {
+    const b1 = bytes[i]
+    const b2 = i + 1 < len ? bytes[i + 1] : 0
+    const b3 = i + 2 < len ? bytes[i + 2] : 0
+    result += chars[b1 >> 2]
+    result += chars[((b1 & 3) << 4) | (b2 >> 4)]
+    result += i + 1 < len ? chars[((b2 & 15) << 2) | (b3 >> 6)] : '='
+    result += i + 2 < len ? chars[b3 & 63] : '='
+  }
+  return result
+}
+
 // STT - 真正调用 AI API
 
 // 获取当前 API 格式
@@ -473,15 +490,10 @@ async function startSTT() {
       console.log('[STT] 服务器音频下载成功, blob大小:', fileBlob.size)
     }
 
-    // 将音频转为 base64
+    // 将音频转为 base64（手写编码，避免 btoa 对二进制数据的兼容性问题）
     console.log('[STT] 开始转换音频为 base64...')
     const arrayBuffer = await fileBlob.arrayBuffer()
-    const bytes = new Uint8Array(arrayBuffer)
-    let binary = ''
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i])
-    }
-    const base64 = btoa(binary)
+    const base64 = uint8ArrayToBase64(new Uint8Array(arrayBuffer))
     console.log('[STT] base64转换完成, 长度:', base64.length)
     const audioFormat = fileName.split('.').pop() || 'mp3'
 
