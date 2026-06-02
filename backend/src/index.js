@@ -11,6 +11,7 @@ const promptRoutes = require('./routes/prompt')
 const aiRoutes = require('./routes/ai')
 const authRoutes = require('./routes/auth')
 const settingsRoutes = require('./routes/settings')
+const storageRoutes = require('./routes/storage')
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -35,6 +36,7 @@ app.use('/api/lyrics', lyricsRoutes)
 app.use('/api/folders', folderRoutes)
 app.use('/api/prompts', promptRoutes)
 app.use('/api/ai', aiRoutes)
+app.use('/api/storage', storageRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {

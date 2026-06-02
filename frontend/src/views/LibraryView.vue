@@ -30,7 +30,7 @@
         <svg viewBox="0 0 1024 1024" width="16" height="16" class="tab-icon">
           <path fill="currentColor" d="M849.408 6.656L411.648 140.8c-53.248 15.36-95.744 70.656-95.744 123.392v461.312S284.16 704 213.504 714.24C109.568 729.088 25.6 808.448 25.6 891.904s83.968 134.656 187.904 119.808c103.936-14.848 179.712-91.648 179.712-175.104v-445.44c0-36.864 44.544-52.736 44.544-52.736l387.072-121.344s43.008-14.336 43.008 25.088v367.616s-39.424-22.528-110.08-14.336c-103.936 12.8-187.904 90.624-187.904 174.08S653.824 905.728 757.76 893.44c103.936-12.8 187.904-90.624 187.904-174.08V74.752c-0.512-52.224-43.52-82.944-96.256-68.096z"/>
         </svg>
-        音频 ({{ libraryStore.audioFiles.length }})
+        音频 ({{ unifiedLibraryStore.audioFiles.length }})
       </button>
       <button class="tab-item" :class="{ active: activeTab === 'subtitles' }"
         @click="activeTab = 'subtitles'">
@@ -38,20 +38,33 @@
           <path fill="currentColor" d="M412.140319 16.584472l197.215394 0 0 74.054901-197.215394 0 0-74.054901Z"/>
           <path fill="currentColor" d="M857.76537 16.965245 678.479848 16.965245c-14.139397 0-25.613378 11.476012-25.613378 25.613378l0 76.841149-281.731925 0L371.134545 42.578623c0-14.136351-11.476012-25.613378-25.614393-25.613378L166.233615 16.965245c-67.772642 0-102.453511 34.678838-102.453511 102.453511l0 793.989328c0 67.798027 34.680869 102.451481 102.453511 102.451481l691.531755 0c67.774673 0 102.451481-34.654469 102.451481-102.451481L960.216851 119.419772C960.217866 51.62073 925.540043 16.965245 857.76537 16.965245zM780.927267 810.95762 243.06664 810.95762c-14.13432 0-25.612362-11.472966-25.612362-25.615409 0-14.158689 11.478043-25.609316 25.612362-25.609316l537.860627 0c14.141428 0 25.617439 11.449611 25.617439 25.609316C806.544707 799.48567 795.068695 810.95762 780.927267 810.95762zM780.927267 595.1757 243.06664 595.1757c-14.13432 0-25.612362-11.449611-25.612362-25.613378 0-14.139397 11.478043-25.613378 25.612362-25.613378l537.860627 0c14.141428 0 25.617439 11.473981 25.617439 25.613378C806.544707 583.725073 795.068695 595.1757 780.927267 595.1757zM780.927267 379.383627 243.06664 379.383627c-14.13432 0-25.612362-11.44555-25.612362-25.611347 0-14.140412 11.478043-25.614393 25.612362-25.614393l537.860627 0c14.141428 0 25.617439 11.473981 25.617439 25.614393C806.544707 367.938077 795.068695 379.383627 780.927267 379.383627z"/>
         </svg>
-        台词 ({{ subtitlesStore.subtitles.length }})
+        台词 ({{ unifiedSubtitlesStore.subtitles.length }})
       </button>
     </div>
 
     <!-- 音频列表 -->
     <div class="content-area" v-if="activeTab === 'audio'">
-      <!-- 本地音频 -->
-      <div class="section-header" v-if="libraryStore.filteredFiles.length > 0">
-        <span class="section-label">本地</span>
+      <!-- 来源筛选 -->
+      <div class="filter-bar" v-if="unifiedLibraryStore.audioFiles.length > 0">
+        <button class="filter-btn" :class="{ active: filterSource === 'all' }"
+          @click="filterSource = 'all'">
+          全部 ({{ unifiedLibraryStore.audioFiles.length }})
+        </button>
+        <button class="filter-btn" :class="{ active: filterSource === 'local' }"
+          @click="filterSource = 'local'">
+          本地 ({{ localCount }})
+        </button>
+        <button class="filter-btn" :class="{ active: filterSource === 'server' }"
+          @click="filterSource = 'server'">
+          服务器 ({{ serverCount }})
+        </button>
       </div>
-      <div class="item-list" v-if="libraryStore.filteredFiles.length > 0">
-        <div class="audio-item" v-for="audio in libraryStore.filteredFiles" :key="audio.id"
+
+      <!-- 统一音频列表 -->
+      <div class="item-list" v-if="unifiedLibraryStore.filteredFiles.length > 0">
+        <div class="audio-item" v-for="audio in unifiedLibraryStore.filteredFiles" :key="audio.id"
           @dblclick="playAudio(audio)">
-          <div class="item-icon audio-icon">
+          <div class="item-icon" :class="audio.source === 'server' ? 'server-icon' : 'audio-icon'">
             <svg viewBox="0 0 1024 1024" width="24" height="24">
               <path fill="currentColor" d="M849.408 6.656L411.648 140.8c-53.248 15.36-95.744 70.656-95.744 123.392v461.312S284.16 704 213.504 714.24C109.568 729.088 25.6 808.448 25.6 891.904s83.968 134.656 187.904 119.808c103.936-14.848 179.712-91.648 179.712-175.104v-445.44c0-36.864 44.544-52.736 44.544-52.736l387.072-121.344s43.008-14.336 43.008 25.088v367.616s-39.424-22.528-110.08-14.336c-103.936 12.8-187.904 90.624-187.904 174.08S653.824 905.728 757.76 893.44c103.936-12.8 187.904-90.624 187.904-174.08V74.752c-0.512-52.224-43.52-82.944-96.256-68.096z"/>
             </svg>
@@ -59,6 +72,9 @@
           <div class="item-info">
             <div class="item-name">{{ audio.name }}</div>
             <div class="item-meta">
+              <span class="tag" :class="audio.source === 'server' ? 'server-tag' : 'local-tag'">
+                {{ audio.source === 'server' ? '服务器' : '本地' }}
+              </span>
               <span class="tag" v-if="getAudioSubtitles(audio.id).length > 0">
                 {{ getAudioSubtitles(audio.id).length }} 个台词
               </span>
@@ -74,34 +90,7 @@
         </div>
       </div>
 
-      <!-- 服务器音频 -->
-      <template v-if="serverAvailable && serverAudioList.length > 0">
-        <div class="section-header">
-          <span class="section-label">服务器</span>
-        </div>
-        <div class="item-list">
-          <div class="audio-item server" v-for="audio in serverAudioList" :key="audio.id"
-            @dblclick="playServerAudio(audio)">
-            <div class="item-icon audio-icon server-icon">
-              <svg viewBox="0 0 24 24" width="24" height="24">
-                <path fill="currentColor" d="M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7l-2 3v1h8v-1l-2-3h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 12H3V4h18v10z"/>
-              </svg>
-            </div>
-            <div class="item-info">
-              <div class="item-name">{{ audio.name }}</div>
-              <div class="item-meta">
-                <span class="tag server-tag">服务器</span>
-              </div>
-            </div>
-            <div class="item-actions">
-              <button class="btn-secondary btn-sm" @click.stop="playServerAudio(audio)">播放</button>
-              <button class="btn-danger btn-sm" @click.stop="deleteServerAudio(audio)">删除</button>
-            </div>
-          </div>
-        </div>
-      </template>
-
-      <div class="empty-state" v-if="libraryStore.filteredFiles.length === 0 && serverAudioList.length === 0">
+      <div class="empty-state" v-if="unifiedLibraryStore.filteredFiles.length === 0">
         <svg viewBox="0 0 24 24"><path fill="currentColor" d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 12H6v-2h8v2zm4-4H6v-2h12v2z"/></svg>
         <p>音频库为空</p>
       </div>
@@ -109,6 +98,22 @@
 
     <!-- 台词列表 -->
     <div class="content-area" v-if="activeTab === 'subtitles'">
+      <!-- 来源筛选 -->
+      <div class="filter-bar" v-if="unifiedSubtitlesStore.subtitles.length > 0">
+        <button class="filter-btn" :class="{ active: filterSource === 'all' }"
+          @click="filterSource = 'all'">
+          全部 ({{ unifiedSubtitlesStore.subtitles.length }})
+        </button>
+        <button class="filter-btn" :class="{ active: filterSource === 'local' }"
+          @click="filterSource = 'local'">
+          本地 ({{ localSubtitlesCount }})
+        </button>
+        <button class="filter-btn" :class="{ active: filterSource === 'server' }"
+          @click="filterSource = 'server'">
+          服务器 ({{ serverSubtitlesCount }})
+        </button>
+      </div>
+
       <div class="item-list" v-if="filteredSubtitles.length > 0">
         <div class="subtitle-item" v-for="sub in filteredSubtitles" :key="sub.id">
           <div class="item-icon subtitle-icon">
@@ -123,6 +128,9 @@
               @blur="saveRename(sub.id)" @keydown.enter="saveRename(sub.id)"
               @keydown.escape="cancelRename" ref="renameInputRef">
             <div class="item-meta">
+              <span class="tag" :class="sub.source === 'server' ? 'server-tag' : 'local-tag'">
+                {{ sub.source === 'server' ? '服务器' : '本地' }}
+              </span>
               <span class="tag source-tag" :class="sub.source">{{ getSourceLabel(sub.source) }}</span>
               <span class="tag" v-if="sub.audioId">
                 关联: {{ getAudioName(sub.audioId) }}
@@ -180,6 +188,8 @@ import { useRouter } from 'vue-router'
 import { useLibraryStore } from '../stores/library'
 import { useSubtitlesStore } from '../stores/subtitles'
 import { usePlayerStore } from '../stores/player'
+import { useUnifiedLibraryStore } from '../stores/unifiedLibrary'
+import { useUnifiedSubtitlesStore } from '../stores/unifiedSubtitles'
 import { parseLRC } from '../utils/lrcParser'
 import { audioApi, checkBackend } from '../api'
 
@@ -187,13 +197,14 @@ const router = useRouter()
 const libraryStore = useLibraryStore()
 const subtitlesStore = useSubtitlesStore()
 const playerStore = usePlayerStore()
+const unifiedLibraryStore = useUnifiedLibraryStore()
+const unifiedSubtitlesStore = useUnifiedSubtitlesStore()
 
 const fileInputRef = ref(null)
 const serverFileInputRef = ref(null)
 const searchQuery = ref('')
 const activeTab = ref('audio')
-const serverAvailable = ref(false)
-const serverAudioList = ref([])
+const filterSource = ref('all') // 'all' | 'local' | 'server'
 
 // 搜索防抖
 let searchTimer = null
@@ -214,30 +225,39 @@ const editingSubtitle = ref(null)
 
 // 过滤台词
 const filteredSubtitles = computed(() => {
-  if (!searchQuery.value) return subtitlesStore.subtitles
-  const query = searchQuery.value.toLowerCase()
-  return subtitlesStore.subtitles.filter(s =>
-    s.name.toLowerCase().includes(query)
-  )
+  let subs = unifiedSubtitlesStore.subtitles
+
+  // 来源筛选
+  if (filterSource.value !== 'all') {
+    subs = subs.filter(s => s.source === filterSource.value)
+  }
+
+  // 搜索
+  if (searchQuery.value) {
+    const query = searchQuery.value.toLowerCase()
+    subs = subs.filter(s =>
+      s.name.toLowerCase().includes(query)
+    )
+  }
+
+  return subs
 })
+
+// 计算属性
+const localCount = computed(() => unifiedLibraryStore.localCount)
+const serverCount = computed(() => unifiedLibraryStore.serverCount)
+const localSubtitlesCount = computed(() => unifiedSubtitlesStore.localCount)
+const serverSubtitlesCount = computed(() => unifiedSubtitlesStore.serverCount)
 
 onMounted(async () => {
-  await libraryStore.loadFromDB()
-  await subtitlesStore.loadAll()
-
-  // 检查后端是否可用
-  serverAvailable.value = await checkBackend()
-  if (serverAvailable.value) {
-    await loadServerAudio()
-  }
+  await unifiedLibraryStore.loadAll()
+  await unifiedSubtitlesStore.loadAll()
 })
 
-async function loadServerAudio() {
-  try {
-    serverAudioList.value = await audioApi.list()
-  } catch (e) {
-    console.error('加载服务器音频失败:', e)
-  }
+// 刷新数据
+async function refreshData() {
+  await unifiedLibraryStore.loadAll()
+  await unifiedSubtitlesStore.loadAll()
 }
 
 function onSearch() {
@@ -270,7 +290,7 @@ async function onServerUpload(e) {
         formData.append('file', file)
         formData.append('name', file.name)
         await audioApi.upload(formData)
-        await loadServerAudio()
+        await refreshData()
       } catch (err) {
         alert('上传失败: ' + err.message)
       }
@@ -281,18 +301,18 @@ async function onServerUpload(e) {
 
 // 获取音频关联的台词
 function getAudioSubtitles(audioId) {
-  return subtitlesStore.getSubtitlesByAudio(audioId)
+  return unifiedSubtitlesStore.getSubtitlesByAudio(audioId)
 }
 
 // 获取音频的默认台词
 function getDefaultSubtitle(audioId) {
-  const subs = subtitlesStore.getSubtitlesByAudio(audioId)
+  const subs = unifiedSubtitlesStore.getSubtitlesByAudio(audioId)
   return subs.find(s => s.isDefault) || null
 }
 
 // 获取音频名称
 function getAudioName(audioId) {
-  const audio = libraryStore.audioFiles.find(a => a.id === audioId)
+  const audio = unifiedLibraryStore.audioFiles.find(a => a.id === audioId)
   return audio?.name || '未知'
 }
 
@@ -303,7 +323,7 @@ function getSourceLabel(source) {
 }
 
 async function playAudio(audio) {
-  const audioData = await libraryStore.getAudioFileWithUrl(audio.id)
+  const audioData = await unifiedLibraryStore.getAudioWithUrl(audio.id)
   if (!audioData || !audioData.url) {
     alert('无法加载音频文件')
     return
@@ -322,35 +342,9 @@ async function playAudio(audio) {
   router.push('/player')
 }
 
-async function playServerAudio(audio) {
-  const url = `/api/audio/${audio.id}/stream`
-  playerStore.loadTrack({ id: audio.id, name: audio.name, url })
-  playerStore.play()
-
-  // 加载默认台词
-  const defaultSub = getDefaultSubtitle(audio.id)
-  if (defaultSub) {
-    const lyrics = parseLRC(defaultSub.content)
-    playerStore.setLyrics(lyrics)
-  }
-
-  router.push('/player')
-}
-
 async function deleteAudio(audio) {
   if (confirm(`确定要删除 "${audio.name}" 吗？`)) {
-    await libraryStore.removeAudioFile(audio.id)
-  }
-}
-
-async function deleteServerAudio(audio) {
-  if (confirm(`确定要从服务器删除 "${audio.name}" 吗？`)) {
-    try {
-      await audioApi.delete(audio.id)
-      await loadServerAudio()
-    } catch (err) {
-      alert('删除失败: ' + err.message)
-    }
+    await unifiedLibraryStore.removeAudio(audio.id)
   }
 }
 
@@ -370,7 +364,7 @@ function cancelRename() {
 
 async function saveRename(id) {
   if (editingName.value.trim()) {
-    await subtitlesStore.renameSubtitle(id, editingName.value.trim())
+    await unifiedSubtitlesStore.renameSubtitle(id, editingName.value.trim())
   }
   cancelRename()
 }
@@ -382,7 +376,7 @@ function editSubtitle(sub) {
 
 async function saveSubtitleEdit() {
   if (editingSubtitle.value) {
-    await subtitlesStore.updateSubtitle(editingSubtitle.value.id, {
+    await unifiedSubtitlesStore.updateSubtitle(editingSubtitle.value.id, {
       name: editingSubtitle.value.name,
       content: editingSubtitle.value.content
     })
@@ -392,7 +386,7 @@ async function saveSubtitleEdit() {
 
 async function deleteSubtitle(sub) {
   if (confirm(`确定要删除 "${sub.name}" 吗？`)) {
-    await subtitlesStore.deleteSubtitle(sub.id)
+    await unifiedSubtitlesStore.deleteSubtitle(sub.id)
   }
 }
 </script>
@@ -475,6 +469,43 @@ async function deleteSubtitle(sub) {
 .content-area {
   flex: 1;
   overflow-y: auto;
+}
+
+/* 筛选栏 */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+}
+
+.filter-btn {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.filter-btn:hover {
+  color: var(--text-secondary);
+}
+
+.filter-btn.active {
+  background: var(--accent-gradient);
+  color: white;
+}
+
+/* 本地标签 */
+.local-tag {
+  background: rgba(74, 222, 128, 0.15);
+  border-color: rgba(74, 222, 128, 0.25);
+  color: var(--color-success);
 }
 
 .item-list {

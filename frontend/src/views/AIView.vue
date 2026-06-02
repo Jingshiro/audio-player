@@ -100,11 +100,18 @@
             <label>选择音频文件</label>
             <select class="select" v-model="selectedAudioId">
               <option value="">-- 从音频库选择 --</option>
-              <option v-for="audio in libraryStore.audioFiles" :key="audio.id" :value="audio.id">
-                {{ audio.name }}
-              </option>
+              <optgroup label="本地音频" v-if="localAudios.length > 0">
+                <option v-for="audio in localAudios" :key="audio.id" :value="audio.id">
+                  {{ audio.name }}
+                </option>
+              </optgroup>
+              <optgroup label="服务器音频" v-if="serverAudios.length > 0">
+                <option v-for="audio in serverAudios" :key="audio.id" :value="audio.id">
+                  {{ audio.name }}
+                </option>
+              </optgroup>
             </select>
-            <span class="form-hint" v-if="libraryStore.audioFiles.length === 0">
+            <span class="form-hint" v-if="unifiedLibraryStore.audioFiles.length === 0">
               音频库为空，请先在「导入音频」中添加
             </span>
           </div>
@@ -166,9 +173,16 @@
             <div class="subtitle-select-row">
               <select class="select" v-model="selectedSubtitleId" @change="onSubtitleSelect">
                 <option value="">-- 选择台词 --</option>
-                <option v-for="sub in subtitlesStore.subtitles" :key="sub.id" :value="sub.id">
-                  {{ sub.name }}
-                </option>
+                <optgroup label="本地台词" v-if="localSubtitles.length > 0">
+                  <option v-for="sub in localSubtitles" :key="sub.id" :value="sub.id">
+                    {{ sub.name }}
+                  </option>
+                </optgroup>
+                <optgroup label="服务器台词" v-if="serverSubtitles.length > 0">
+                  <option v-for="sub in serverSubtitles" :key="sub.id" :value="sub.id">
+                    {{ sub.name }}
+                  </option>
+                </optgroup>
               </select>
               <button class="btn-secondary btn-sm" @click="triggerTranslateLrcImport"
                 title="导入新的 LRC 文件">
@@ -231,6 +245,8 @@ import { useAIStore } from '../stores/ai'
 import { usePromptStore } from '../stores/prompt'
 import { useLibraryStore } from '../stores/library'
 import { useSubtitlesStore } from '../stores/subtitles'
+import { useUnifiedLibraryStore } from '../stores/unifiedLibrary'
+import { useUnifiedSubtitlesStore } from '../stores/unifiedSubtitles'
 import { MODEL_PRESETS, getPreset } from '../utils/modelPresets'
 import { aiApi, checkBackend } from '../api'
 
@@ -238,6 +254,8 @@ const aiStore = useAIStore()
 const promptStore = usePromptStore()
 const libraryStore = useLibraryStore()
 const subtitlesStore = useSubtitlesStore()
+const unifiedLibraryStore = useUnifiedLibraryStore()
+const unifiedSubtitlesStore = useUnifiedSubtitlesStore()
 
 // 检测后端是否可用
 const hasBackend = ref(false)
@@ -286,9 +304,17 @@ function selectPreset(presetId) {
 
 // 加载音频库
 onMounted(async () => {
-  await libraryStore.loadFromDB()
-  await subtitlesStore.loadAll()
+  await unifiedLibraryStore.loadAll()
+  await unifiedSubtitlesStore.loadAll()
 })
+
+// 计算属性：本地和服务器音频
+const localAudios = computed(() => unifiedLibraryStore.localAudios)
+const serverAudios = computed(() => unifiedLibraryStore.serverAudios)
+
+// 计算属性：本地和服务器台词
+const localSubtitles = computed(() => unifiedSubtitlesStore.localSubtitles)
+const serverSubtitles = computed(() => unifiedSubtitlesStore.serverSubtitles)
 
 async function fetchModels() {
   if (!aiStore.config.apiKey || !aiStore.config.baseUrl) {
@@ -416,18 +442,32 @@ async function startSTT() {
   aiStore.startGeneration()
 
   try {
-    // 从 IndexedDB 加载音频文件
-    const audioData = await libraryStore.getAudioFileWithUrl(selectedAudioId.value)
-    if (!audioData || !audioData.fileBlob) {
-      throw new Error('无法加载音频文件')
+    // 根据来源加载音频
+    const audioItem = unifiedLibraryStore.audioFiles.find(a => a.id === selectedAudioId.value)
+    let fileBlob, fileName
+
+    if (audioItem.source === 'local') {
+      // 本地音频：从 IndexedDB 加载
+      const audioData = await unifiedLibraryStore.getAudioWithUrl(selectedAudioId.value)
+      if (!audioData || !audioData.fileBlob) {
+        throw new Error('无法加载音频文件')
+      }
+      fileBlob = audioData.fileBlob
+      fileName = audioData.originalName || 'audio.wav'
+    } else {
+      // 服务器音频：下载后转 base64
+      fileBlob = await unifiedLibraryStore.getAudioBlob(selectedAudioId.value)
+      if (!fileBlob) {
+        throw new Error('无法下载服务器音频')
+      }
+      fileName = audioItem.originalName || 'audio.wav'
     }
 
     // 将音频转为 base64
-    const arrayBuffer = await audioData.fileBlob.arrayBuffer()
+    const arrayBuffer = await fileBlob.arrayBuffer()
     const base64 = btoa(
       new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
     )
-    const fileName = audioData.originalName || 'audio.wav'
     const audioFormat = fileName.split('.').pop() || 'mp3'
 
     // 构建 system prompt
@@ -596,7 +636,7 @@ function onSubtitleSelect() {
     translateInput.value = ''
     return
   }
-  const sub = subtitlesStore.getSubtitle(selectedSubtitleId.value)
+  const sub = unifiedSubtitlesStore.getSubtitle(selectedSubtitleId.value)
   if (sub) {
     translateInput.value = sub.content
   }
@@ -617,7 +657,7 @@ async function importLrcToSubtitles(file) {
   try {
     const text = await file.text()
     const name = file.name.replace(/\.[^/.]+$/, '')
-    const sub = await subtitlesStore.addSubtitle({
+    const sub = await unifiedSubtitlesStore.addSubtitle({
       name,
       content: text,
       source: 'import'
@@ -634,7 +674,7 @@ async function importLrcToSubtitles(file) {
 // 删除台词
 async function deleteSubtitle(subtitleId) {
   if (confirm('确定要删除这个台词吗？')) {
-    await subtitlesStore.deleteSubtitle(subtitleId)
+    await unifiedSubtitlesStore.deleteSubtitle(subtitleId)
     if (selectedSubtitleId.value === subtitleId) {
       selectedSubtitleId.value = ''
       translateInput.value = ''
@@ -653,7 +693,7 @@ async function saveResult() {
 
   // 获取音频名称用于命名
   const audioName = selectedAudioId.value
-    ? libraryStore.audioFiles.find(a => a.id === selectedAudioId.value)?.name || '未知'
+    ? unifiedLibraryStore.audioFiles.find(a => a.id === selectedAudioId.value)?.name || '未知'
     : '未知'
 
   // 根据当前操作判断来源
@@ -662,7 +702,7 @@ async function saveResult() {
   const subtitleName = `${prefix}-${audioName}`
 
   // 保存到台词库
-  await subtitlesStore.addSubtitle({
+  await unifiedSubtitlesStore.addSubtitle({
     name: subtitleName,
     content,
     source,

@@ -239,3 +239,19 @@ export const aiApi = {
     })
   }
 }
+
+// Storage API
+export const storageApi = {
+  getStats() {
+    return request('/storage/stats')
+  },
+  clearLyrics() {
+    return request('/storage/clear-lyrics', { method: 'POST' })
+  },
+  clearAudio() {
+    return request('/storage/clear-audio', { method: 'POST' })
+  },
+  clearAll() {
+    return request('/storage/clear-all', { method: 'POST' })
+  }
+}
