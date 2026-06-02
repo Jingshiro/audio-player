@@ -139,6 +139,7 @@ watch(() => settings.crossPagePlay, (val) => localStorage.setItem('cross_page_pl
 
 onMounted(async () => {
   await settingsStore.loadSettings()
+  unifiedSubtitlesStore.setDefaultStorage(settingsStore.subtitleStorage)
   await loadStorageStats()
 })
 

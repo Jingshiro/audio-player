@@ -7,7 +7,7 @@ export const useUnifiedSubtitlesStore = defineStore('unifiedSubtitles', () => {
   // 统一台词列表，包含 local 和 server
   const subtitles = ref([])
   const isLoading = ref(false)
-  const defaultStorage = ref('local') // 'local' | 'server'
+  const defaultStorage = ref(localStorage.getItem('subtitle_storage') || 'local') // 'local' | 'server'
 
   // 计算属性
   const localSubtitles = computed(() =>
