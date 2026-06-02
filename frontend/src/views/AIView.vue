@@ -443,31 +443,46 @@ async function startSTT() {
 
   try {
     // 根据来源加载音频
+    console.log('[STT] 查找音频, selectedAudioId:', selectedAudioId.value)
+    console.log('[STT] 音频库总数:', unifiedLibraryStore.audioFiles.length)
     const audioItem = unifiedLibraryStore.audioFiles.find(a => a.id === selectedAudioId.value)
+    if (!audioItem) {
+      throw new Error(`未找到选中的音频文件（ID: ${selectedAudioId.value}），请刷新音频列表后重试`)
+    }
+    console.log('[STT] 找到音频:', audioItem.name, '来源:', audioItem.source)
     let fileBlob, fileName
 
     if (audioItem.source === 'local') {
       // 本地音频：从 IndexedDB 加载
+      console.log('[STT] 从 IndexedDB 加载本地音频...')
       const audioData = await unifiedLibraryStore.getAudioWithUrl(selectedAudioId.value)
       if (!audioData || !audioData.fileBlob) {
-        throw new Error('无法加载音频文件')
+        throw new Error('无法加载本地音频文件（可能 IndexedDB 数据已丢失，请重新导入）')
       }
       fileBlob = audioData.fileBlob
       fileName = audioData.originalName || 'audio.wav'
+      console.log('[STT] 本地音频加载成功, blob大小:', fileBlob.size)
     } else {
       // 服务器音频：下载后转 base64
+      console.log('[STT] 从服务器下载音频...')
       fileBlob = await unifiedLibraryStore.getAudioBlob(selectedAudioId.value)
       if (!fileBlob) {
-        throw new Error('无法下载服务器音频')
+        throw new Error('无法下载服务器音频（请确认服务器可访问）')
       }
       fileName = audioItem.originalName || 'audio.wav'
+      console.log('[STT] 服务器音频下载成功, blob大小:', fileBlob.size)
     }
 
     // 将音频转为 base64
+    console.log('[STT] 开始转换音频为 base64...')
     const arrayBuffer = await fileBlob.arrayBuffer()
-    const base64 = btoa(
-      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-    )
+    const bytes = new Uint8Array(arrayBuffer)
+    let binary = ''
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i])
+    }
+    const base64 = btoa(binary)
+    console.log('[STT] base64转换完成, 长度:', base64.length)
     const audioFormat = fileName.split('.').pop() || 'mp3'
 
     // 构建 system prompt
@@ -480,6 +495,7 @@ async function startSTT() {
 
     if (hasBackend.value) {
       // 走后端代理
+      console.log('[STT] 走后端代理, hasBackend:', hasBackend.value, 'apiKey:', !!aiStore.config.apiKey)
       const result = await aiApi.stt({
         baseUrl: aiStore.config.baseUrl,
         apiKey: aiStore.config.apiKey,
