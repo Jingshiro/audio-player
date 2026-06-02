@@ -21,8 +21,8 @@ app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:8080',
   credentials: true
 }))
-app.use(express.json({ limit: '100mb' }))
-app.use(express.urlencoded({ extended: true, limit: '100mb' }))
+app.use(express.json())
+app.use(express.urlencoded({ extended: true }))
 
 // Static files - serve uploaded audio
 const uploadDir = path.resolve(process.env.UPLOAD_DIR || './data')
