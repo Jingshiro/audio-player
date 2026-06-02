@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS lyrics (
   language TEXT DEFAULT 'zh',
   content TEXT NOT NULL,
   format TEXT DEFAULT 'lrc',
-  audio_id TEXT NOT NULL,
+  audio_id TEXT,
   is_default INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now')),
