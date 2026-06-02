@@ -20,11 +20,10 @@ services:
     ports:
       - "${BACKEND_PORT:-3000}:3000"
     volumes:
-      - ./data/audio:/app/uploads/audio
-      - ./data/lyrics:/app/uploads/lyrics
-      - db-data:/app/data
+      - ./data:/app/data
     environment:
       - DATABASE_URL=file:./data/music.db
+      - UPLOAD_DIR=/app/data/audio
       - NODE_ENV=production
     restart: unless-stopped
 
