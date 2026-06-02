@@ -73,7 +73,15 @@ router.post('/stt', async (req, res) => {
       const response = await fetch(geminiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents }),
+        body: JSON.stringify({
+          contents,
+          safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+          ]
+        }),
         signal: controller.signal
       }).finally(() => clearTimeout(timeout))
 
@@ -88,6 +96,14 @@ router.post('/stt', async (req, res) => {
 
       const data = await response.json()
       console.log('[AI/STT] Gemini 响应 JSON keys:', Object.keys(data))
+
+      // 检查是否被安全过滤器拦截
+      if (data.promptFeedback?.blockReason) {
+        const reason = data.promptFeedback.blockReason
+        console.log('[AI/STT] ⛔ Gemini 安全拦截:', reason)
+        return res.status(422).json({ error: `内容被 Gemini 安全过滤器拦截（${reason}）。建议切换为非 Gemini 服务商。` })
+      }
+
       const content = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
       console.log('[AI/STT] ✅ Gemini 返回内容长度:', content.length)
       if (content) {
