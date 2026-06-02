@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon.png" alt="Logo" width="128" />
+</p>
+
 # 🎵 凑合用的音声播放器
 
 一个用来学习英语的工具（大嘘）
