@@ -3,8 +3,6 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
-    paths:
-      - 'music-player/**'
   workflow_dispatch:
 
 permissions:
@@ -29,17 +27,17 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        working-directory: music-player/frontend
+        working-directory: frontend
         run: npm ci
 
       - name: Build
-        working-directory: music-player/frontend
+        working-directory: frontend
         run: npm run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: music-player/frontend/dist
+          path: frontend/dist
 
   deploy:
     environment:
