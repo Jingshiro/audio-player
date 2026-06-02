@@ -31,6 +31,16 @@ function detectFormat(baseUrl) {
   return 'openai'
 }
 
+// 秒数 → LRC 时间戳 [mm:ss.xx]
+function formatLrcTime(seconds) {
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  const cs = Math.floor((seconds % 1) * 100)
+  return String(mins).padStart(2, '0') + ':' +
+    String(secs).padStart(2, '0') + '.' +
+    String(cs).padStart(2, '0')
+}
+
 // 根据文件扩展名获取 MIME 类型
 function getMimeType(format) {
   const map = {
@@ -208,7 +218,17 @@ router.post('/stt', async (req, res) => {
       console.log('[AI/STT] Whisper 响应 JSON keys:', Object.keys(data))
 
       // verbose_json 返回 { text, segments: [{start, end, text}], language }
-      const content = data.text || ''
+      // 将 segments 转为 LRC 时间戳格式
+      let content = ''
+      if (data.segments && data.segments.length > 0) {
+        content = data.segments.map(seg => {
+          const time = formatLrcTime(seg.start)
+          return `[${time}]${seg.text.trim()}`
+        }).join('\n')
+        console.log('[AI/STT] LRC 行数:', data.segments.length)
+      } else {
+        content = data.text || ''
+      }
       console.log('[AI/STT] ✅ Whisper 返回内容长度:', content.length)
       if (content) {
         console.log('[AI/STT] 内容前200字:', content.substring(0, 200))
