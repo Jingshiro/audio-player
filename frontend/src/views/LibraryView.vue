@@ -13,7 +13,13 @@
         <svg viewBox="0 0 24 24" width="18" height="18">
           <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
         </svg>
-        上传音频
+        本地导入
+      </button>
+      <button v-if="serverAvailable" class="btn-primary" @click="triggerServerUpload">
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path fill="currentColor" d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/>
+        </svg>
+        上传到服务器
       </button>
     </div>
 
@@ -38,6 +44,10 @@
 
     <!-- 音频列表 -->
     <div class="content-area" v-if="activeTab === 'audio'">
+      <!-- 本地音频 -->
+      <div class="section-header" v-if="libraryStore.filteredFiles.length > 0">
+        <span class="section-label">本地</span>
+      </div>
       <div class="item-list" v-if="libraryStore.filteredFiles.length > 0">
         <div class="audio-item" v-for="audio in libraryStore.filteredFiles" :key="audio.id"
           @dblclick="playAudio(audio)">
@@ -63,7 +73,35 @@
           </div>
         </div>
       </div>
-      <div class="empty-state" v-else>
+
+      <!-- 服务器音频 -->
+      <template v-if="serverAvailable && serverAudioList.length > 0">
+        <div class="section-header">
+          <span class="section-label">服务器</span>
+        </div>
+        <div class="item-list">
+          <div class="audio-item server" v-for="audio in serverAudioList" :key="audio.id"
+            @dblclick="playServerAudio(audio)">
+            <div class="item-icon audio-icon server-icon">
+              <svg viewBox="0 0 24 24" width="24" height="24">
+                <path fill="currentColor" d="M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7l-2 3v1h8v-1l-2-3h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 12H3V4h18v10z"/>
+              </svg>
+            </div>
+            <div class="item-info">
+              <div class="item-name">{{ audio.name }}</div>
+              <div class="item-meta">
+                <span class="tag server-tag">服务器</span>
+              </div>
+            </div>
+            <div class="item-actions">
+              <button class="btn-secondary btn-sm" @click.stop="playServerAudio(audio)">播放</button>
+              <button class="btn-danger btn-sm" @click.stop="deleteServerAudio(audio)">删除</button>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div class="empty-state" v-if="libraryStore.filteredFiles.length === 0 && serverAudioList.length === 0">
         <svg viewBox="0 0 24 24"><path fill="currentColor" d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 12H6v-2h8v2zm4-4H6v-2h12v2z"/></svg>
         <p>音频库为空</p>
       </div>
@@ -108,6 +146,7 @@
 
     <!-- 隐藏的文件输入 -->
     <input type="file" ref="fileInputRef" accept="audio/*" multiple style="display:none" @change="onFileImport">
+    <input type="file" ref="serverFileInputRef" accept="audio/*" multiple style="display:none" @change="onServerUpload">
 
     <!-- 编辑台词弹窗 -->
     <div class="modal-overlay" v-if="editingSubtitle" @click.self="editingSubtitle = null">
@@ -142,6 +181,7 @@ import { useLibraryStore } from '../stores/library'
 import { useSubtitlesStore } from '../stores/subtitles'
 import { usePlayerStore } from '../stores/player'
 import { parseLRC } from '../utils/lrcParser'
+import { audioApi, checkBackend } from '../api'
 
 const router = useRouter()
 const libraryStore = useLibraryStore()
@@ -149,8 +189,11 @@ const subtitlesStore = useSubtitlesStore()
 const playerStore = usePlayerStore()
 
 const fileInputRef = ref(null)
+const serverFileInputRef = ref(null)
 const searchQuery = ref('')
 const activeTab = ref('audio')
+const serverAvailable = ref(false)
+const serverAudioList = ref([])
 
 // 搜索防抖
 let searchTimer = null
@@ -181,7 +224,21 @@ const filteredSubtitles = computed(() => {
 onMounted(async () => {
   await libraryStore.loadFromDB()
   await subtitlesStore.loadAll()
+
+  // 检查后端是否可用
+  serverAvailable.value = await checkBackend()
+  if (serverAvailable.value) {
+    await loadServerAudio()
+  }
 })
+
+async function loadServerAudio() {
+  try {
+    serverAudioList.value = await audioApi.list()
+  } catch (e) {
+    console.error('加载服务器音频失败:', e)
+  }
+}
 
 function onSearch() {
   debounceSearch(searchQuery.value)
@@ -191,6 +248,10 @@ function triggerImport() {
   fileInputRef.value?.click()
 }
 
+function triggerServerUpload() {
+  serverFileInputRef.value?.click()
+}
+
 async function onFileImport(e) {
   const files = e.target.files
   for (const file of files) {
@@ -198,6 +259,24 @@ async function onFileImport(e) {
       await libraryStore.addAudioFile(file)
     }
   }
+}
+
+async function onServerUpload(e) {
+  const files = e.target.files
+  for (const file of files) {
+    if (file.type.startsWith('audio/')) {
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('name', file.name)
+        await audioApi.upload(formData)
+        await loadServerAudio()
+      } catch (err) {
+        alert('上传失败: ' + err.message)
+      }
+    }
+  }
+  e.target.value = ''
 }
 
 // 获取音频关联的台词
@@ -243,9 +322,35 @@ async function playAudio(audio) {
   router.push('/player')
 }
 
+async function playServerAudio(audio) {
+  const url = `/api/audio/${audio.id}/stream`
+  playerStore.loadTrack({ id: audio.id, name: audio.name, url })
+  playerStore.play()
+
+  // 加载默认台词
+  const defaultSub = getDefaultSubtitle(audio.id)
+  if (defaultSub) {
+    const lyrics = parseLRC(defaultSub.content)
+    playerStore.setLyrics(lyrics)
+  }
+
+  router.push('/player')
+}
+
 async function deleteAudio(audio) {
   if (confirm(`确定要删除 "${audio.name}" 吗？`)) {
     await libraryStore.removeAudioFile(audio.id)
+  }
+}
+
+async function deleteServerAudio(audio) {
+  if (confirm(`确定要从服务器删除 "${audio.name}" 吗？`)) {
+    try {
+      await audioApi.delete(audio.id)
+      await loadServerAudio()
+    } catch (err) {
+      alert('删除失败: ' + err.message)
+    }
   }
 }
 
@@ -458,6 +563,32 @@ async function deleteSubtitle(sub) {
   background: rgba(74, 222, 128, 0.15);
   border-color: rgba(74, 222, 128, 0.25);
   color: var(--color-success);
+}
+
+.server-tag {
+  background: rgba(96, 165, 250, 0.15);
+  border-color: rgba(96, 165, 250, 0.25);
+  color: var(--color-info);
+}
+
+.server-icon {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+}
+
+.section-header {
+  margin: 16px 0 8px 0;
+}
+
+.section-header:first-child {
+  margin-top: 0;
+}
+
+.section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .item-actions {

@@ -1,5 +1,15 @@
 const API_BASE = '/api'
 
+// 检查后端是否可用
+export async function checkBackend() {
+  try {
+    const res = await fetch(`${API_BASE}/health`)
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 async function request(url, options = {}) {
   const response = await fetch(`${API_BASE}${url}`, {
     headers: {
