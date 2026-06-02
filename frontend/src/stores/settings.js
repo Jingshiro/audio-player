@@ -25,10 +25,9 @@ export const useSettingsStore = defineStore('settings', () => {
   // 保存台词存储位置
   async function saveSubtitleStorage(storage) {
     subtitleStorage.value = storage
+    localStorage.setItem('subtitle_storage', storage)
     if (hasBackend.value) {
       await settingsApi.set('subtitle_storage', storage)
-    } else {
-      localStorage.setItem('subtitle_storage', storage)
     }
   }
 
