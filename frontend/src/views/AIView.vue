@@ -330,6 +330,9 @@ const serverAudios = computed(() => unifiedLibraryStore.serverAudios)
 const localSubtitles = computed(() => unifiedSubtitlesStore.localSubtitles)
 const serverSubtitles = computed(() => unifiedSubtitlesStore.serverSubtitles)
 
+// 追踪最后一次生成操作的类型，避免命名混乱
+const lastGeneratedType = ref('')
+
 function detectApiFormat(baseUrl) {
   if (baseUrl.includes('generativelanguage.googleapis.com')) return 'gemini'
   if (baseUrl.includes('groq.com')) return 'whisper'
@@ -390,6 +393,7 @@ async function startSTT() {
   const cfg = aiStore.sttConfig
   if (!selectedAudioId.value || !cfg.apiKey) { alert('请先配置STT的API密钥并选择音频文件'); return }
   aiStore.startGeneration()
+  lastGeneratedType.value = 'stt'
   try {
     const audioItem = unifiedLibraryStore.audioFiles.find(a => a.id === selectedAudioId.value)
     if (!audioItem) throw new Error('未找到音频文件，请刷新列表')
@@ -436,6 +440,7 @@ async function startTranslate() {
   const cfg = aiStore.translateConfig
   if (!translateInput.value || !cfg.apiKey) { alert('请先配置翻译API密钥并输入台词'); return }
   aiStore.startGeneration()
+  lastGeneratedType.value = 'translate'
   try {
     let sp = translatePrompt.value || `翻译为${getLanguageName(translateTo.value)}，保持LRC格式`
     let content = ''
@@ -470,7 +475,8 @@ function getLanguageName(c) { return { ja: '日语', en: '英语', ko: '韩语',
 async function saveResult() {
   if (!aiStore.generationResult) return
   const n = selectedAudioId.value ? unifiedLibraryStore.audioFiles.find(a => a.id === selectedAudioId.value)?.name || '未知' : '未知'
-  await unifiedSubtitlesStore.addSubtitle({ name: (translateInput.value ? '[翻译]' : '[STT]') + '-' + n, content: aiStore.generationResult, source: translateInput.value ? 'translate' : 'stt', audioId: selectedAudioId.value || null })
+  const type = lastGeneratedType.value || 'stt'
+  await unifiedSubtitlesStore.addSubtitle({ name: (type === 'translate' ? '[翻译]' : '[STT]') + '-' + n, content: aiStore.generationResult, source: type, audioId: selectedAudioId.value || null })
   alert('台词已保存')
 }
 function retryGeneration() { aiStore.clearResult(); startSTT() }
