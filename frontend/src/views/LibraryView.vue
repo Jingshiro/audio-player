@@ -205,6 +205,7 @@ const serverFileInputRef = ref(null)
 const searchQuery = ref('')
 const activeTab = ref('audio')
 const filterSource = ref('all') // 'all' | 'local' | 'server'
+const serverAvailable = ref(false)
 
 // 搜索防抖
 let searchTimer = null
@@ -252,6 +253,9 @@ const serverSubtitlesCount = computed(() => unifiedSubtitlesStore.serverCount)
 onMounted(async () => {
   await unifiedLibraryStore.loadAll()
   await unifiedSubtitlesStore.loadAll()
+
+  // 检查后端是否可用
+  serverAvailable.value = await checkBackend()
 })
 
 // 刷新数据
