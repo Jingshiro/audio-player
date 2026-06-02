@@ -105,15 +105,6 @@
         </div>
       </div>
     </div>
-
-    <!-- 数据导入导出 -->
-    <div class="glass-card">
-      <div class="section-title">数据管理</div>
-      <div class="data-actions">
-        <button class="btn-secondary" @click="exportData">导出所有数据</button>
-        <button class="btn-secondary" @click="importData">导入数据</button>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -228,49 +219,6 @@ async function clearServerAudio() {
       alert('清除失败: ' + err.message)
     }
   }
-}
-
-// 数据管理
-function exportData() {
-  const data = {
-    settings,
-    subtitleStorage: settingsStore.subtitleStorage
-  }
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `audio-player-settings-${new Date().toISOString().split('T')[0]}.json`
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-function importData() {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = '.json'
-  input.onchange = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        try {
-          const data = JSON.parse(event.target.result)
-          if (data.settings) {
-            Object.assign(settings, data.settings)
-          }
-          if (data.subtitleStorage) {
-            settingsStore.saveSubtitleStorage(data.subtitleStorage)
-          }
-          alert('数据导入成功')
-        } catch (err) {
-          alert('导入失败: ' + err.message)
-        }
-      }
-      reader.readAsText(file)
-    }
-  }
-  input.click()
 }
 </script>
 
@@ -443,25 +391,17 @@ function importData() {
   flex-wrap: wrap;
 }
 
-/* 数据管理 */
-.data-actions {
-  display: flex;
-  gap: 12px;
-}
-
 /* 响应式 */
 @media (max-width: 768px) {
   .stats-grid {
     grid-template-columns: 1fr;
   }
 
-  .cleanup-actions,
-  .data-actions {
+  .cleanup-actions {
     flex-direction: column;
   }
 
-  .cleanup-actions button,
-  .data-actions button {
+  .cleanup-actions button {
     width: 100%;
   }
 }
