@@ -6,6 +6,7 @@ const router = express.Router()
 function detectFormat(baseUrl) {
   if (baseUrl.includes('generativelanguage.googleapis.com')) return 'gemini'
   if (baseUrl.includes('xiaomimimo.com')) return 'mimo'
+  if (baseUrl.includes('groq.com')) return 'whisper'
   return 'openai'
 }
 
@@ -114,6 +115,71 @@ router.post('/stt', async (req, res) => {
       const result = { content }
       if (!content) result._raw = data  // 空内容时附带原始响应，方便前端诊断
       res.json(result)
+    } else if (format === 'whisper') {
+      // Groq Whisper 转录 API（multipart/form-data 上传原始音频）
+      const mimeType = getMimeType(audioFormat)
+      const audioBuffer = Buffer.from(audioBase64, 'base64')
+      const cleanBaseUrl = baseUrl.replace(/\/+$/, '')
+      const apiUrl = `${cleanBaseUrl}/audio/transcriptions`
+
+      console.log('[AI/STT] 使用 Whisper API:', apiUrl)
+      console.log('[AI/STT] 音频大小:', Math.round(audioBuffer.length / 1024) + 'KB')
+
+      // RFC 1867 multipart form data（纯 Buffer，不依赖 FormData）
+      const boundary = '----WhisperBoundary' + Math.random().toString(36).substring(2)
+      const CRLF = '\r\n'
+      const fileHeader = Buffer.from(
+        `--${boundary}${CRLF}` +
+        `Content-Disposition: form-data; name="file"; filename="audio.${audioFormat}"${CRLF}` +
+        `Content-Type: ${mimeType}${CRLF}${CRLF}`
+      )
+      const modelPart = Buffer.from(
+        `${CRLF}--${boundary}${CRLF}` +
+        `Content-Disposition: form-data; name="model"${CRLF}${CRLF}` +
+        `${model}${CRLF}` +
+        `--${boundary}${CRLF}` +
+        `Content-Disposition: form-data; name="response_format"${CRLF}${CRLF}` +
+        `verbose_json${CRLF}` +
+        `--${boundary}--${CRLF}`
+      )
+      const body = Buffer.concat([fileHeader, audioBuffer, modelPart])
+
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 120000)
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`
+        },
+        body,
+        signal: controller.signal
+      }).finally(() => clearTimeout(timeout))
+
+      const elapsed = Date.now() - startTime
+      console.log('[AI/STT] Whisper 响应状态:', response.status, '耗时:', elapsed + 'ms')
+
+      if (!response.ok) {
+        const error = await response.text()
+        console.log('[AI/STT] ❌ Whisper 返回错误:', error.substring(0, 500))
+        return res.status(response.status).json({ error: `Whisper error: ${error.substring(0, 300)}` })
+      }
+
+      const data = await response.json()
+      console.log('[AI/STT] Whisper 响应 JSON keys:', Object.keys(data))
+
+      // verbose_json 返回 { text, segments: [{start, end, text}], language }
+      const content = data.text || ''
+      console.log('[AI/STT] ✅ Whisper 返回内容长度:', content.length)
+      if (content) {
+        console.log('[AI/STT] 内容前200字:', content.substring(0, 200))
+      } else {
+        console.log('[AI/STT] ⚠️ 内容为空！完整响应:', JSON.stringify(data).substring(0, 1000))
+      }
+      const result2 = { content }
+      if (!content) result2._raw = data
+      res.json(result2)
     } else {
       // OpenAI / MiMo 兼容格式
       const cleanBaseUrl = baseUrl.replace(/\/+$/, '')

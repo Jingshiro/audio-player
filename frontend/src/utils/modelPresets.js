@@ -25,6 +25,14 @@ export const MODEL_PRESETS = {
     authType: 'api-key',
     audioFormat: 'mimo'
   },
+  groq: {
+    id: 'groq',
+    name: 'Groq',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    authType: 'bearer',
+    audioFormat: 'whisper',
+    defaultModel: 'whisper-large-v3'
+  },
   custom: {
     id: 'custom',
     name: '自定义（OpenAI 兼容）',
