@@ -1,0 +1,42 @@
+# Drama / 音频文件
+*.m4a
+*.mp3
+*.wav
+*.flac
+*.ogg
+
+# 文档
+*.docx
+*.txt
+*.lrc
+player.html
+PLAN.md
+UE_DESIGN.md
+UE_UPDATE.md
+
+# MCP 配置
+.mcp.json
+
+# Node
+node_modules/
+dist/
+
+# 数据库
+*.db
+*.db-journal
+*.db-wal
+
+# 环境变量
+.env
+.env.local
+
+# Docker 数据
+data/
+
+# IDE
+.vscode/
+.idea/
+
+# 系统文件
+.DS_Store
+Thumbs.db

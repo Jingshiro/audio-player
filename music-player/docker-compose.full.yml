@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: ghcr.io/jingshiro/audio-player-frontend:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    image: ghcr.io/jingshiro/audio-player-backend:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      - ./data/audio:/app/uploads/audio
+      - ./data/lyrics:/app/uploads/lyrics
+      - db-data:/app/data
+    environment:
+      - DATABASE_URL=file:./data/music.db
+      - NODE_ENV=production
+    restart: unless-stopped
+
+volumes:
+  db-data:
