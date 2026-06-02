@@ -162,6 +162,11 @@ export const useUnifiedSubtitlesStore = defineStore('unifiedSubtitles', () => {
     return subtitles.value.filter(s => s.audioId === audioId)
   }
 
+  // 获取未绑定音频的台词
+  function getUnlinkedSubtitles() {
+    return subtitles.value.filter(s => !s.audioId)
+  }
+
   // 绑定台词到音频
   async function linkToAudio(subtitleId, audioId) {
     return updateSubtitle(subtitleId, { audioId })
@@ -213,6 +218,7 @@ export const useUnifiedSubtitlesStore = defineStore('unifiedSubtitles', () => {
     renameSubtitle,
     getSubtitle,
     getSubtitlesByAudio,
+    getUnlinkedSubtitles,
     linkToAudio,
     unlinkFromAudio,
     setAsDefault,

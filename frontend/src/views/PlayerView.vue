@@ -181,12 +181,12 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { usePlayerStore } from '../stores/player'
 import { useLibraryStore } from '../stores/library'
-import { useSubtitlesStore } from '../stores/subtitles'
+import { useUnifiedSubtitlesStore } from '../stores/unifiedSubtitles'
 import { parseLRC, formatTime, formatTimeDetailed, extractMeta } from '../utils/lrcParser'
 
 const playerStore = usePlayerStore()
 const libraryStore = useLibraryStore()
-const subtitlesStore = useSubtitlesStore()
+const unifiedSubtitlesStore = useUnifiedSubtitlesStore()
 
 // DOM 引用
 const audioInputRef = ref(null)
@@ -212,18 +212,18 @@ const currentAudioId = computed(() => playerStore.currentTrack?.id || null)
 // 当前音频绑定的台词
 const boundLyrics = computed(() => {
   if (!currentAudioId.value) return []
-  return subtitlesStore.getSubtitlesByAudio(currentAudioId.value)
+  return unifiedSubtitlesStore.getSubtitlesByAudio(currentAudioId.value)
 })
 
 // 未绑定的台词
 const unboundLyrics = computed(() => {
-  return subtitlesStore.getUnlinkedSubtitles()
+  return unifiedSubtitlesStore.getUnlinkedSubtitles()
 })
 
 // 当前选中的台词数据
 const currentLyricData = computed(() => {
   if (!selectedLyricId.value) return null
-  return subtitlesStore.getSubtitle(selectedLyricId.value)
+  return unifiedSubtitlesStore.getSubtitle(selectedLyricId.value)
 })
 
 onMounted(async () => {
@@ -233,7 +233,7 @@ onMounted(async () => {
     playerStore.setAudioElement(audioEl)
   }
   // 加载台词库
-  await subtitlesStore.loadAll()
+  await unifiedSubtitlesStore.loadAll()
 })
 
 // 监听当前台词变化，自动滚动
@@ -332,7 +332,7 @@ function onLrcImport(e) {
       })
 
       // 同时保存到台词库（供 AI 工具使用）
-      subtitlesStore.addSubtitle({
+      unifiedSubtitlesStore.addSubtitle({
         name: file.name.replace(/\.[^/.]+$/, ''),
         content: text,
         source: 'import'
@@ -386,7 +386,7 @@ async function onDrop(e) {
           lyrics
         })
         // 同时保存到台词库（供 AI 工具使用）
-        subtitlesStore.addSubtitle({
+        unifiedSubtitlesStore.addSubtitle({
           name: file.name.replace(/\.[^/.]+$/, ''),
           content: text,
           source: 'import'
@@ -403,7 +403,7 @@ function onLyricSelect() {
     playerStore.clearLyrics()
     return
   }
-  const sub = subtitlesStore.getSubtitle(selectedLyricId.value)
+  const sub = unifiedSubtitlesStore.getSubtitle(selectedLyricId.value)
   if (sub) {
     const lyrics = parseLRC(sub.content)
     playerStore.setLyrics(lyrics)
@@ -420,14 +420,14 @@ function onLyricSelect() {
 // 绑定台词到当前音频
 async function bindLyric() {
   if (!selectedLyricId.value || !currentAudioId.value) return
-  await subtitlesStore.linkToAudio(selectedLyricId.value, currentAudioId.value)
+  await unifiedSubtitlesStore.linkToAudio(selectedLyricId.value, currentAudioId.value)
   alert('已绑定到当前音频')
 }
 
 // 设为默认台词
 async function setDefaultLyric() {
   if (!selectedLyricId.value) return
-  await subtitlesStore.setAsDefault(selectedLyricId.value)
+  await unifiedSubtitlesStore.setAsDefault(selectedLyricId.value)
   alert('已设为默认台词')
 }
 
