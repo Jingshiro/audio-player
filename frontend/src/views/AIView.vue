@@ -232,11 +232,18 @@ import { usePromptStore } from '../stores/prompt'
 import { useLibraryStore } from '../stores/library'
 import { useSubtitlesStore } from '../stores/subtitles'
 import { MODEL_PRESETS, getPreset } from '../utils/modelPresets'
+import { aiApi, checkBackend } from '../api'
 
 const aiStore = useAIStore()
 const promptStore = usePromptStore()
 const libraryStore = useLibraryStore()
 const subtitlesStore = useSubtitlesStore()
+
+// 检测后端是否可用
+const hasBackend = ref(false)
+onMounted(async () => {
+  hasBackend.value = await checkBackend()
+})
 
 // 模型预设列表
 const modelPresets = Object.values(MODEL_PRESETS)
@@ -291,16 +298,41 @@ async function fetchModels() {
 
   isLoadingModels.value = true
   try {
-    // 通过后端代理调用
-    const data = await aiApi.models({
-      baseUrl: aiStore.config.baseUrl,
-      apiKey: aiStore.config.apiKey
-    })
+    let models = []
 
-    availableModels.value = data.data || []
+    if (hasBackend.value) {
+      // 走后端代理
+      const data = await aiApi.models({
+        baseUrl: aiStore.config.baseUrl,
+        apiKey: aiStore.config.apiKey
+      })
+      models = data.data || []
+    } else {
+      // 直接调用（纯前端模式）
+      const apiFormat = getApiFormat()
+      let url, headers = {}
 
-    if (availableModels.value.length > 0 && !availableModels.value.find(m => m.id === aiStore.config.model)) {
-      aiStore.config.model = availableModels.value[0].id
+      if (apiFormat === 'gemini') {
+        url = `${aiStore.config.baseUrl}/models?key=${aiStore.config.apiKey}`
+      } else {
+        url = `${aiStore.config.baseUrl.replace(/\/$/, '')}/models`
+        headers = getAuthHeaders()
+      }
+
+      const response = await fetch(url, { headers })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const data = await response.json()
+
+      if (apiFormat === 'gemini') {
+        models = (data.models || []).map(m => ({ id: m.name.replace('models/', '') }))
+      } else {
+        models = data.data || []
+      }
+    }
+
+    availableModels.value = models
+    if (models.length > 0 && !models.find(m => m.id === aiStore.config.model)) {
+      aiStore.config.model = models[0].id
     }
   } catch (error) {
     console.error('拉取模型列表失败:', error)
@@ -404,18 +436,68 @@ async function startSTT() {
       systemPrompt = sttPrompt.value
     }
 
-    // 通过后端代理调用
-    const result = await aiApi.stt({
-      baseUrl: aiStore.config.baseUrl,
-      apiKey: aiStore.config.apiKey,
-      model: aiStore.config.model,
-      audioBase64: base64,
-      audioFormat,
-      systemPrompt
-    })
+    let content = ''
 
-    if (result.content) {
-      aiStore.appendResult(result.content)
+    if (hasBackend.value) {
+      // 走后端代理
+      const result = await aiApi.stt({
+        baseUrl: aiStore.config.baseUrl,
+        apiKey: aiStore.config.apiKey,
+        model: aiStore.config.model,
+        audioBase64: base64,
+        audioFormat,
+        systemPrompt
+      })
+      content = result.content || ''
+    } else {
+      // 直接调用（纯前端模式）
+      const apiFormat = getApiFormat()
+      let requestBody, apiUrl
+
+      if (apiFormat === 'gemini') {
+        const modelName = aiStore.config.model.startsWith('models/') ? aiStore.config.model : `models/${aiStore.config.model}`
+        apiUrl = `${aiStore.config.baseUrl}/${modelName}:generateContent`
+        requestBody = {
+          contents: [{ parts: [
+            { text: `${systemPrompt}\n\n请将这段音频转录为带有时间戳的 LRC 格式台词。` },
+            { inlineData: { mimeType: `audio/${audioFormat}`, data: base64 } }
+          ] }],
+          generationConfig: { maxOutputTokens: 4096 }
+        }
+      } else {
+        apiUrl = `${aiStore.config.baseUrl.replace(/\/$/, '')}/chat/completions`
+        requestBody = {
+          model: aiStore.config.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: [
+              { type: 'input_audio', input_audio: { data: base64, format: audioFormat } },
+              { type: 'text', text: '请将这段音频转录为带有时间戳的 LRC 格式台词。' }
+            ]}
+          ],
+          stream: false,
+          max_completion_tokens: 4096
+        }
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify(requestBody)
+      })
+
+      if (!response.ok) throw new Error(`API 错误 ${response.status}`)
+      const result = await response.json()
+
+      if (apiFormat === 'gemini') {
+        content = result.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      } else {
+        content = result.choices?.[0]?.message?.content || ''
+      }
+    }
+
+    if (content) {
+      aiStore.appendResult(content)
     }
     aiStore.stopGeneration()
   } catch (error) {
@@ -441,19 +523,64 @@ async function startTranslate() {
       systemPrompt = translatePrompt.value
     }
 
-    // 通过后端代理调用
-    const result = await aiApi.translate({
-      baseUrl: aiStore.config.baseUrl,
-      apiKey: aiStore.config.apiKey,
-      model: aiStore.config.model,
-      text: translateInput.value,
-      targetLanguage: getLanguageName(translateTo.value),
-      systemPrompt,
-      stream: false
-    })
+    let content = ''
 
-    if (result.content) {
-      aiStore.appendResult(result.content)
+    if (hasBackend.value) {
+      // 走后端代理
+      const result = await aiApi.translate({
+        baseUrl: aiStore.config.baseUrl,
+        apiKey: aiStore.config.apiKey,
+        model: aiStore.config.model,
+        text: translateInput.value,
+        targetLanguage: getLanguageName(translateTo.value),
+        systemPrompt,
+        stream: false
+      })
+      content = result.content || ''
+    } else {
+      // 直接调用（纯前端模式）
+      const apiFormat = getApiFormat()
+      let requestBody, apiUrl
+
+      if (apiFormat === 'gemini') {
+        const modelName = aiStore.config.model.startsWith('models/') ? aiStore.config.model : `models/${aiStore.config.model}`
+        apiUrl = `${aiStore.config.baseUrl}/${modelName}:generateContent`
+        requestBody = {
+          contents: [{ parts: [
+            { text: `${systemPrompt}\n\n${translateInput.value}` }
+          ] }],
+          generationConfig: { maxOutputTokens: 4096 }
+        }
+      } else {
+        apiUrl = `${aiStore.config.baseUrl.replace(/\/$/, '')}/chat/completions`
+        requestBody = {
+          model: aiStore.config.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: translateInput.value }
+          ],
+          stream: false
+        }
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify(requestBody)
+      })
+
+      if (!response.ok) throw new Error(`API 错误 ${response.status}`)
+      const result = await response.json()
+
+      if (apiFormat === 'gemini') {
+        content = result.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      } else {
+        content = result.choices?.[0]?.message?.content || ''
+      }
+    }
+
+    if (content) {
+      aiStore.appendResult(content)
     }
     aiStore.stopGeneration()
   } catch (error) {
