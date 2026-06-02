@@ -9,6 +9,22 @@ function detectFormat(baseUrl) {
   return 'openai'
 }
 
+// 根据文件扩展名获取 MIME 类型
+function getMimeType(format) {
+  const map = {
+    'mp3': 'audio/mpeg',
+    'm4a': 'audio/mp4',
+    'wav': 'audio/wav',
+    'ogg': 'audio/ogg',
+    'flac': 'audio/flac',
+    'aac': 'audio/aac',
+    'aiff': 'audio/aiff',
+    'webm': 'audio/webm',
+    'opus': 'audio/ogg'
+  }
+  return map[format] || 'audio/mpeg'
+}
+
 // 构建认证头
 function buildHeaders(apiKey, format) {
   if (format === 'gemini') return {}
@@ -39,15 +55,17 @@ router.post('/stt', async (req, res) => {
   try {
     if (format === 'gemini') {
       // Gemini API 格式
+      const mimeType = getMimeType(audioFormat)
       const geminiUrl = `${baseUrl}/models/${model}:generateContent?key=${apiKey}`
       const contents = [{
         parts: [
           { text: systemPrompt || 'Please transcribe this audio to LRC format lyrics with timestamps.' },
-          { inline_data: { mime_type: 'audio/mp3', data: audioBase64 } }
+          { inline_data: { mime_type: mimeType, data: audioBase64 } }
         ]
       }]
 
       console.log('[AI/STT] 向 Gemini 发起请求:', geminiUrl.substring(0, 80) + '...')
+      console.log('[AI/STT] 音频 MIME 类型:', mimeType)
 
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 120000) // 2分钟超时
@@ -69,9 +87,14 @@ router.post('/stt', async (req, res) => {
       }
 
       const data = await response.json()
+      console.log('[AI/STT] Gemini 响应 JSON keys:', Object.keys(data))
       const content = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
       console.log('[AI/STT] ✅ Gemini 返回内容长度:', content.length)
-      console.log('[AI/STT] 内容前200字:', content.substring(0, 200))
+      if (content) {
+        console.log('[AI/STT] 内容前200字:', content.substring(0, 200))
+      } else {
+        console.log('[AI/STT] ⚠️ 内容为空！完整响应:', JSON.stringify(data).substring(0, 2000))
+      }
       res.json({ content })
     } else {
       // OpenAI / MiMo 兼容格式
