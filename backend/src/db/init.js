@@ -6,7 +6,13 @@ let db = null
 
 function getDb() {
   if (!db) {
-    const dbPath = path.resolve(process.env.DATABASE_URL || './data/music.db')
+    // 处理 DATABASE_URL=file:./data/music.db 格式
+    let dbPath = process.env.DATABASE_URL || './data/music.db'
+    if (dbPath.startsWith('file:')) {
+      dbPath = dbPath.slice(5)
+    }
+    dbPath = path.resolve(dbPath)
+
     const dbDir = path.dirname(dbPath)
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true })
