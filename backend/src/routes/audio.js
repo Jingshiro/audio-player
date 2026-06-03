@@ -72,8 +72,23 @@ router.get('/:id/stream', (req, res) => {
 
   const stat = fs.statSync(filePath)
   const fileSize = stat.size
-  const range = req.headers.range
 
+  // 根据文件扩展名确定 Content-Type
+  const ext = path.extname(row.filename).toLowerCase()
+  const mimeTypes = {
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+    '.ogg': 'audio/ogg',
+    '.flac': 'audio/flac',
+    '.m4a': 'audio/mp4',
+    '.aac': 'audio/aac',
+    '.wma': 'audio/x-ms-wma',
+    '.opus': 'audio/opus',
+    '.webm': 'audio/webm'
+  }
+  const contentType = mimeTypes[ext] || 'audio/mpeg'
+
+  const range = req.headers.range
   if (range) {
     const parts = range.replace(/bytes=/, '').split('-')
     const start = parseInt(parts[0], 10)
@@ -84,14 +99,15 @@ router.get('/:id/stream', (req, res) => {
       'Content-Range': `bytes ${start}-${end}/${fileSize}`,
       'Accept-Ranges': 'bytes',
       'Content-Length': chunksize,
-      'Content-Type': 'audio/mpeg'
+      'Content-Type': contentType
     }
     res.writeHead(206, head)
     file.pipe(res)
   } else {
     const head = {
       'Content-Length': fileSize,
-      'Content-Type': 'audio/mpeg'
+      'Content-Type': contentType,
+      'Accept-Ranges': 'bytes'
     }
     res.writeHead(200, head)
     fs.createReadStream(filePath).pipe(res)
