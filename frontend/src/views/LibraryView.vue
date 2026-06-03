@@ -181,7 +181,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLibraryStore } from '../stores/library'
 import { useSubtitlesStore } from '../stores/subtitles'
@@ -260,6 +260,10 @@ onMounted(async () => {
   serverAvailable.value = await checkBackend()
 })
 
+onUnmounted(() => {
+  clearTimeout(searchTimer)
+})
+
 // 刷新数据
 async function refreshData() {
   await unifiedLibraryStore.loadAll()
@@ -278,9 +282,15 @@ async function onFileImport(e) {
   const files = e.target.files
   for (const file of files) {
     if (file.type.startsWith('audio/')) {
-      await libraryStore.addAudioFile(file)
+      try {
+        await libraryStore.addAudioFile(file)
+        toastRef.value?.success(`已导入 ${file.name}`)
+      } catch (err) {
+        toastRef.value?.error(`导入失败: ${err.message}`)
+      }
     }
   }
+  e.target.value = ''
 }
 
 async function onServerUpload(e) {
@@ -352,7 +362,12 @@ async function deleteAudio(audio) {
     danger: true
   })
   if (confirmed) {
-    await unifiedLibraryStore.removeAudio(audio.id)
+    try {
+      await unifiedLibraryStore.removeAudio(audio.id)
+      toastRef.value?.success('已删除')
+    } catch (err) {
+      toastRef.value?.error(`删除失败: ${err.message}`)
+    }
   }
 }
 
@@ -372,7 +387,12 @@ function cancelRename() {
 
 async function saveRename(id) {
   if (editingName.value.trim()) {
-    await unifiedSubtitlesStore.renameSubtitle(id, editingName.value.trim())
+    try {
+      await unifiedSubtitlesStore.renameSubtitle(id, editingName.value.trim())
+      toastRef.value?.success('重命名成功')
+    } catch (err) {
+      toastRef.value?.error(`重命名失败: ${err.message}`)
+    }
   }
   cancelRename()
 }
@@ -385,12 +405,16 @@ function editSubtitle(sub) {
 
 async function saveSubtitleEdit() {
   if (editingSubtitle.value) {
-    await unifiedSubtitlesStore.updateSubtitle(editingSubtitle.value.id, {
-      name: editingSubtitle.value.name,
-      content: editingSubtitle.value.content
-    })
-    showEditModal.value = false
-    toastRef.value?.success('台词已保存')
+    try {
+      await unifiedSubtitlesStore.updateSubtitle(editingSubtitle.value.id, {
+        name: editingSubtitle.value.name,
+        content: editingSubtitle.value.content
+      })
+      showEditModal.value = false
+      toastRef.value?.success('台词已保存')
+    } catch (err) {
+      toastRef.value?.error(`保存失败: ${err.message}`)
+    }
   }
 }
 
@@ -401,7 +425,12 @@ async function deleteSubtitle(sub) {
     danger: true
   })
   if (confirmed) {
-    await unifiedSubtitlesStore.deleteSubtitle(sub.id)
+    try {
+      await unifiedSubtitlesStore.deleteSubtitle(sub.id)
+      toastRef.value?.success('已删除')
+    } catch (err) {
+      toastRef.value?.error(`删除失败: ${err.message}`)
+    }
   }
 }
 </script>

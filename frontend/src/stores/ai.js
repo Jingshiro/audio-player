@@ -4,7 +4,10 @@ import { settingsApi, getAuthToken } from '../api'
 
 export const useAIStore = defineStore('ai', () => {
   // ===== 保存的 API 预设 =====
-  const apiPresets = ref(JSON.parse(localStorage.getItem('api_presets') || '[]'))
+  const apiPresets = ref((() => {
+    try { return JSON.parse(localStorage.getItem('api_presets') || '[]') }
+    catch { return [] }
+  })())
 
   function addApiPreset(name, baseUrl, apiKey, model) {
     const id = 'ap_' + Date.now()
@@ -54,7 +57,10 @@ export const useAIStore = defineStore('ai', () => {
   // ===== 兼容旧配置迁移 =====
   function migrateLegacy(key) {
     const old = localStorage.getItem('ai_' + key)
-    if (old) localStorage.setItem('stt_' + key, old) && localStorage.setItem('translate_' + key, old)
+    if (old) {
+      localStorage.setItem('stt_' + key, old)
+      localStorage.setItem('translate_' + key, old)
+    }
   }
 
   // ===== STT 独立配置 =====

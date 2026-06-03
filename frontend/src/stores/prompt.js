@@ -3,7 +3,10 @@ import { ref, computed } from 'vue'
 
 export const usePromptStore = defineStore('prompt', () => {
   // 破限词预设列表
-  const presets = ref(JSON.parse(localStorage.getItem('prompt_presets') || '[]'))
+  const presets = ref((() => {
+    try { return JSON.parse(localStorage.getItem('prompt_presets') || '[]') }
+    catch { return [] }
+  })())
 
   // 默认预设 ID
   const defaultPresetId = ref(localStorage.getItem('default_preset_id') || null)

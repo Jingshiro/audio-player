@@ -66,8 +66,19 @@ export const usePlayerStore = defineStore('player', () => {
   })
 
   // 操作方法
+  let currentAudioRef = null
+  let savedListeners = {}
+
   function setAudioElement(el) {
+    // 移除旧监听器
+    if (currentAudioRef) {
+      for (const [event, handler] of Object.entries(savedListeners)) {
+        currentAudioRef.removeEventListener(event, handler)
+      }
+      savedListeners = {}
+    }
     audioElement.value = el
+    currentAudioRef = el
     setupAudioListeners()
   }
 
@@ -84,35 +95,25 @@ export const usePlayerStore = defineStore('player', () => {
       audio.volume = saved.isMuted ? 0 : (saved.volume ?? 0.8)
     }
 
-    audio.addEventListener('play', () => {
-      isPlaying.value = true
-    })
+    savedListeners = {
+      play: () => { isPlaying.value = true },
+      pause: () => { isPlaying.value = false; persistState() },
+      timeupdate: () => {
+        currentTime.value = audio.currentTime
+        updateCurrentLyricIndex()
+        const now = Date.now()
+        if (now - lastSaveTime > 5000) {
+          lastSaveTime = now
+          persistState()
+        }
+      },
+      loadedmetadata: () => { duration.value = audio.duration },
+      ended: () => { isPlaying.value = false; playNext() }
+    }
 
-    audio.addEventListener('pause', () => {
-      isPlaying.value = false
-      persistState()
-    })
-
-    audio.addEventListener('timeupdate', () => {
-      currentTime.value = audio.currentTime
-      updateCurrentLyricIndex()
-
-      // 每 5 秒保存一次进度
-      const now = Date.now()
-      if (now - lastSaveTime > 5000) {
-        lastSaveTime = now
-        persistState()
-      }
-    })
-
-    audio.addEventListener('loadedmetadata', () => {
-      duration.value = audio.duration
-    })
-
-    audio.addEventListener('ended', () => {
-      isPlaying.value = false
-      playNext()
-    })
+    for (const [event, handler] of Object.entries(savedListeners)) {
+      audio.addEventListener(event, handler)
+    }
 
     audio.volume = volume.value
   }

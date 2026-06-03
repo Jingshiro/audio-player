@@ -329,6 +329,8 @@ router.post('/translate', async (req, res) => {
   }
 
   const format = detectFormat(baseUrl)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 120000) // 120 秒超时
 
   try {
     if (format === 'gemini') {
@@ -344,7 +346,8 @@ router.post('/translate', async (req, res) => {
       const response = await fetch(geminiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents })
+        body: JSON.stringify({ contents }),
+        signal: controller.signal
       })
 
       if (!response.ok) {
@@ -374,7 +377,8 @@ router.post('/translate', async (req, res) => {
       const response = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ model, messages, stream: !!stream })
+        body: JSON.stringify({ model, messages, stream: !!stream }),
+        signal: controller.signal
       })
 
       if (!response.ok) {
@@ -409,7 +413,12 @@ router.post('/translate', async (req, res) => {
       }
     }
   } catch (err) {
+    if (err.name === 'AbortError') {
+      return res.status(504).json({ error: 'AI 服务商响应超时（超过2分钟）' })
+    }
     res.status(500).json({ error: err.message })
+  } finally {
+    clearTimeout(timeout)
   }
 })
 

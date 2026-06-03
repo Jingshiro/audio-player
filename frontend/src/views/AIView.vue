@@ -21,9 +21,16 @@
     <div class="glass-card ai-settings">
       <div class="section-title">STT 模型配置</div>
       <div class="form-group">
-        <label>服务提供商</label>
+        <label>
+          服务提供商
+          <button class="help-btn" @click="showSttHelp = true" title="STT 使用说明">
+            <svg viewBox="0 0 24 24" width="14" height="14">
+              <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+            </svg>
+          </button>
+        </label>
         <div class="preset-selector">
-          <button v-for="preset in modelPresets" :key="preset.id"
+          <button v-for="preset in sttModelPresets" :key="preset.id"
             class="preset-btn" :class="{ active: aiStore.sttPresetId === preset.id }"
             @click="aiStore.selectProvider(preset.id, preset, 'stt')">{{ preset.name }}</button>
         </div>
@@ -63,10 +70,11 @@
       <div class="form-group">
         <label>服务提供商</label>
         <div class="preset-selector">
-          <button v-for="preset in modelPresets" :key="preset.id"
+          <button v-for="preset in translateModelPresets" :key="preset.id"
             class="preset-btn" :class="{ active: aiStore.translatePresetId === preset.id }"
             @click="aiStore.selectProvider(preset.id, preset, 'translate')">{{ preset.name }}</button>
         </div>
+        <span class="form-hint">💡 翻译任务很简单，用便宜的小模型就行，没必要上贵的</span>
       </div>
       <div class="grid-3">
         <div class="form-group">
@@ -97,37 +105,44 @@
       </div>
     </div>
 
-    <!-- 破限词配置 -->
-    <div class="glass-card prompt-config">
-      <div class="section-title">破限词配置</div>
-      <div class="grid-2">
-        <div class="form-group">
-          <label>STT 破限词</label>
-          <textarea class="textarea" v-model="sttPrompt"
-            placeholder="在调用STT API时作为system prompt发送，用于突破语音识别的内容限制..."
-            rows="4"></textarea>
-        </div>
-        <div class="form-group">
-          <label>翻译破限词</label>
-          <textarea class="textarea" v-model="translatePrompt"
-            placeholder="在调用翻译API时作为system prompt发送，用于突破翻译的内容限制..."
-            rows="4"></textarea>
-        </div>
+    <!-- 破限词配置（可折叠） -->
+    <div class="glass-card prompt-config collapsible">
+      <div class="section-title collapsible-header" @click="showPromptConfig = !showPromptConfig">
+        <span>破限词配置</span>
+        <svg class="chevron" :class="{ expanded: showPromptConfig }" viewBox="0 0 24 24" width="18" height="18">
+          <path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/>
+        </svg>
       </div>
-      <div class="prompt-actions">
-        <button class="btn-secondary" @click="savePrompts">应用</button>
-        <button class="btn-secondary" @click="showPresetManager = true">
-          <svg viewBox="0 0 24 24" width="16" height="16">
-            <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-          </svg>
-          另存预设
-        </button>
-        <select class="select preset-select" v-model="selectedPresetId" @change="loadPreset">
-          <option value="">加载预设...</option>
-          <option v-for="preset in promptStore.presets" :key="preset.id" :value="preset.id">
-            {{ preset.name }}
-          </option>
-        </select>
+      <div class="collapsible-content" v-show="showPromptConfig">
+        <div class="grid-2">
+          <div class="form-group">
+            <label>STT 破限词</label>
+            <textarea class="textarea" v-model="sttPrompt"
+              placeholder="在调用STT API时作为system prompt发送，用于突破语音识别的内容限制..."
+              rows="4"></textarea>
+          </div>
+          <div class="form-group">
+            <label>翻译破限词</label>
+            <textarea class="textarea" v-model="translatePrompt"
+              placeholder="在调用翻译API时作为system prompt发送，用于突破翻译的内容限制..."
+              rows="4"></textarea>
+          </div>
+        </div>
+        <div class="prompt-actions">
+          <button class="btn-secondary" @click="savePrompts">应用</button>
+          <button class="btn-secondary" @click="showPresetManager = true">
+            <svg viewBox="0 0 24 24" width="16" height="16">
+              <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+            </svg>
+            另存预设
+          </button>
+          <select class="select preset-select" v-model="selectedPresetId" @change="loadPreset">
+            <option value="">加载预设...</option>
+            <option v-for="preset in promptStore.presets" :key="preset.id" :value="preset.id">
+              {{ preset.name }}
+            </option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -273,6 +288,37 @@
     <!-- 确认弹窗 -->
     <ConfirmDialog ref="confirmRef" />
 
+    <!-- STT 帮助弹窗 -->
+    <BaseModal v-model="showSttHelp" title="STT 使用说明" width="500px">
+      <div class="help-content">
+        <p><strong>⚠️ 重要提示：必须选择支持语音理解的模型</strong></p>
+        <p>STT（语音转文字）不是所有模型都支持，需要选择专门处理音频的模型：</p>
+        <ul>
+          <li><strong>Groq</strong>：推荐 whisper-large-v3（速度快、效果好）</li>
+          <li><strong>OpenAI</strong>：支持 Whisper 系列模型</li>
+          <li><strong>Gemini</strong>：支持原生音频理解（推荐 gemini-2.0-flash 等多模态模型）</li>
+          <li><strong>本地 Whisper</strong>：完全免费、无审查，需要自己部署</li>
+        </ul>
+        <p><strong>🚫 如果遇到空返回或拒绝响应</strong></p>
+        <p>STT 服务通常比文字输入有更严格的内容审查。如果生成结果为空或被拒绝：</p>
+        <ul>
+          <li>尝试在「破限词配置」中加入适当的引导词</li>
+          <li>或切换到本地部署方案</li>
+        </ul>
+        <p><strong>🏠 本地部署</strong></p>
+        <p>如果你不想依赖云端服务，可以在本地部署 Whisper：</p>
+        <ol>
+          <li><strong>faster-whisper</strong>（推荐）：<code>pip install faster-whisper</code></li>
+          <li><strong>whisper.cpp</strong>：轻量级 C++ 实现</li>
+          <li>启动后会提供 OpenAI 兼容的 API 地址（通常是 <code>http://localhost:8080/v1</code>）</li>
+          <li>在选择「本地 Whisper」后，API 密钥留空即可</li>
+        </ol>
+      </div>
+      <template #footer>
+        <button class="btn-primary" @click="showSttHelp = false">我知道了</button>
+      </template>
+    </BaseModal>
+
     <!-- Toast -->
     <Toast ref="toastRef" />
   </div>
@@ -298,7 +344,22 @@ const confirmRef = ref(null)
 const toastRef = ref(null)
 
 const hasBackend = ref(false)
-const modelPresets = Object.values(MODEL_PRESETS)
+const showSttHelp = ref(false)
+const allModelPresets = Object.values(MODEL_PRESETS)
+
+// STT 预设（过滤 MiMo，Groq 优先）
+const sttModelPresets = computed(() => {
+  const filtered = allModelPresets.filter(p => p.id !== 'mimo')
+  // Groq 放首位
+  const groq = filtered.find(p => p.id === 'groq')
+  const others = filtered.filter(p => p.id !== 'groq')
+  return groq ? [groq, ...others] : filtered
+})
+
+// 翻译预设（过滤 MiMo）
+const translateModelPresets = computed(() => {
+  return allModelPresets.filter(p => p.id !== 'mimo')
+})
 
 const sttPrompt = ref(aiStore.sttPrompt)
 const translatePrompt = ref(aiStore.translatePrompt)
@@ -309,6 +370,7 @@ const translateInput = ref('')
 const translateSource = ref('text')
 const selectedSubtitleId = ref('')
 const translateLrcInputRef = ref(null)
+const showPromptConfig = ref(false)
 const showPresetManager = ref(false)
 const presetName = ref('')
 const selectedPresetId = ref('')
@@ -364,6 +426,8 @@ function detectApiFormat(baseUrl) {
   return 'openai'
 }
 function buildAuthHeaders(apiKey, format) {
+  // Ollama 本地部署不需要认证
+  if (!apiKey) return {}
   if (format === 'gemini') return { 'x-goog-api-key': apiKey }
   return { 'Authorization': `Bearer ${apiKey}` }
 }
@@ -652,6 +716,40 @@ function discardResult() { aiStore.clearResult() }
   color: white;
 }
 
+/* 可折叠面板 */
+.collapsible {
+  padding: 0;
+}
+
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  margin: 0;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast);
+  border-radius: var(--radius-lg);
+}
+
+.collapsible-header:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.collapsible-header .chevron {
+  transition: transform 0.2s ease;
+  color: var(--text-muted);
+}
+
+.collapsible-header .chevron.expanded {
+  transform: rotate(180deg);
+}
+
+.collapsible-content {
+  padding: 0 24px 20px;
+}
+
 /* 破限词配置 */
 .prompt-actions {
   display: flex;
@@ -785,5 +883,64 @@ function discardResult() { aiStore.clearResult() }
   .tools-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* 帮助按钮 */
+.help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  vertical-align: middle;
+}
+
+.help-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--text-primary);
+}
+
+/* 帮助内容 */
+.help-content {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.help-content p {
+  margin: 12px 0;
+}
+
+.help-content p:first-child {
+  margin-top: 0;
+}
+
+.help-content strong {
+  color: var(--text-primary);
+}
+
+.help-content ul, .help-content ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.help-content li {
+  margin: 6px 0;
+}
+
+.help-content code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 </style>

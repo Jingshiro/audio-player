@@ -19,6 +19,29 @@
       </div>
     </div>
 
+    <!-- 账号安全（仅全栈模式） -->
+    <div class="glass-card" v-if="settingsStore.hasBackend">
+      <div class="section-title">账号安全</div>
+
+      <div class="password-form">
+        <div class="form-group">
+          <label>当前密码</label>
+          <input type="password" v-model="passwordForm.oldPassword" placeholder="请输入当前密码">
+        </div>
+        <div class="form-group">
+          <label>新密码</label>
+          <input type="password" v-model="passwordForm.newPassword" placeholder="请输入新密码">
+        </div>
+        <div class="form-group">
+          <label>确认新密码</label>
+          <input type="password" v-model="passwordForm.confirmPassword" placeholder="请再次输入新密码">
+        </div>
+        <button class="btn-primary" @click="changePassword" :disabled="changingPassword">
+          {{ changingPassword ? '修改中...' : '修改密码' }}
+        </button>
+      </div>
+    </div>
+
     <!-- 存储设置 -->
     <div class="glass-card">
       <div class="section-title">存储设置</div>
@@ -118,7 +141,7 @@ import { useUnifiedLibraryStore } from '../stores/unifiedLibrary'
 import { useUnifiedSubtitlesStore } from '../stores/unifiedSubtitles'
 import { useLibraryStore } from '../stores/library'
 import { useSubtitlesStore } from '../stores/subtitles'
-import { storageApi } from '../api'
+import { storageApi, authApi } from '../api'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import Toast from '../components/Toast.vue'
 
@@ -129,6 +152,48 @@ const confirmRef = ref(null)
 const toastRef = ref(null)
 
 const storageStats = ref(null)
+
+// 密码修改
+const passwordForm = reactive({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+const changingPassword = ref(false)
+
+async function changePassword() {
+  const { oldPassword, newPassword, confirmPassword } = passwordForm
+
+  if (!oldPassword) {
+    toastRef.value?.error('请输入当前密码')
+    return
+  }
+  if (!newPassword) {
+    toastRef.value?.error('请输入新密码')
+    return
+  }
+  if (newPassword.length < 4) {
+    toastRef.value?.error('新密码至少需要4个字符')
+    return
+  }
+  if (newPassword !== confirmPassword) {
+    toastRef.value?.error('两次输入的密码不一致')
+    return
+  }
+
+  changingPassword.value = true
+  try {
+    await authApi.changePassword(oldPassword, newPassword)
+    toastRef.value?.success('密码修改成功')
+    passwordForm.oldPassword = ''
+    passwordForm.newPassword = ''
+    passwordForm.confirmPassword = ''
+  } catch (err) {
+    toastRef.value?.error(err.message || '密码修改失败')
+  } finally {
+    changingPassword.value = false
+  }
+}
 
 // 播放设置
 const settings = reactive({
@@ -172,14 +237,18 @@ async function clearLocalLyrics() {
     danger: true
   })
   if (confirmed) {
-    const localStore = useSubtitlesStore()
-    const localSubs = unifiedSubtitlesStore.localSubtitles
-    for (const sub of localSubs) {
-      await localStore.deleteSubtitle(sub.id)
+    try {
+      const localStore = useSubtitlesStore()
+      const localSubs = unifiedSubtitlesStore.localSubtitles
+      for (const sub of localSubs) {
+        await localStore.deleteSubtitle(sub.id)
+      }
+      await unifiedSubtitlesStore.loadAll()
+      await loadStorageStats()
+      toastRef.value?.success('本地台词已清除')
+    } catch (err) {
+      toastRef.value?.error('清除失败: ' + err.message)
     }
-    await unifiedSubtitlesStore.loadAll()
-    await loadStorageStats()
-    toastRef.value?.success('本地台词已清除')
   }
 }
 
@@ -190,14 +259,18 @@ async function clearLocalAudio() {
     danger: true
   })
   if (confirmed) {
-    const libraryStore = useLibraryStore()
-    const localAudios = unifiedLibraryStore.localAudios
-    for (const audio of localAudios) {
-      await libraryStore.removeAudioFile(audio.id)
+    try {
+      const libraryStore = useLibraryStore()
+      const localAudios = unifiedLibraryStore.localAudios
+      for (const audio of localAudios) {
+        await libraryStore.removeAudioFile(audio.id)
+      }
+      await unifiedLibraryStore.loadAll()
+      await loadStorageStats()
+      toastRef.value?.success('本地音频已清除')
+    } catch (err) {
+      toastRef.value?.error('清除失败: ' + err.message)
     }
-    await unifiedLibraryStore.loadAll()
-    await loadStorageStats()
-    toastRef.value?.success('本地音频已清除')
   }
 }
 
@@ -282,6 +355,42 @@ async function clearServerAudio() {
   flex-direction: column;
   gap: 8px;
   margin-bottom: 16px;
+}
+
+.form-group input[type="password"] {
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: border-color var(--transition-fast);
+}
+
+.form-group input[type="password"]:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.form-group input[type="password"]::placeholder {
+  color: var(--text-muted);
+}
+
+/* 密码表单 */
+.password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.password-form .btn-primary {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.password-form .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .form-group label {

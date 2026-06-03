@@ -141,7 +141,7 @@ onMounted(async () => {
         showLogin.value = true
       } else {
         // 已登录，加载服务器设置
-        await aiStore.loadFromServer()
+        await aiStore.loadApiPresetsFromServer()
       }
     } catch {
       showLogin.value = true
@@ -157,7 +157,7 @@ async function handleLogin() {
     const { token } = await authApi.login(loginPassword.value)
     setAuthToken(token)
     showLogin.value = false
-    await aiStore.loadFromServer()
+    await aiStore.loadApiPresetsFromServer()
   } catch (e) {
     loginError.value = e.message || '登录失败'
   } finally {

@@ -9,63 +9,76 @@ router.use(requireAuth)
 
 // GET /api/settings - 获取所有设置
 router.get('/', (req, res) => {
-  const db = getDb()
-  const rows = db.prepare("SELECT key, value FROM settings WHERE key != 'auth_password'").all()
+  try {
+    const db = getDb()
+    const rows = db.prepare("SELECT key, value FROM settings WHERE key != 'auth_password'").all()
 
-  // 转换为对象
-  const settings = {}
-  for (const row of rows) {
-    settings[row.key] = row.value
+    const settings = {}
+    for (const row of rows) {
+      settings[row.key] = row.value
+    }
+
+    res.json(settings)
+  } catch (e) {
+    console.error('获取设置失败:', e)
+    res.status(500).json({ error: '获取设置失败' })
   }
-
-  res.json(settings)
 })
 
 // PUT /api/settings - 更新设置
 router.put('/', (req, res) => {
-  const { key, value } = req.body
-  if (!key) {
-    return res.status(400).json({ error: 'key is required' })
+  try {
+    const { key, value } = req.body
+    if (!key) {
+      return res.status(400).json({ error: 'key is required' })
+    }
+
+    if (key === 'auth_password') {
+      return res.status(400).json({ error: '请使用 /api/auth/password 修改密码' })
+    }
+
+    const db = getDb()
+    db.prepare(`
+      INSERT INTO settings (key, value, updated_at)
+      VALUES (?, ?, datetime('now'))
+      ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')
+    `).run(key, value, value)
+
+    res.json({ success: true })
+  } catch (e) {
+    console.error('更新设置失败:', e)
+    res.status(500).json({ error: '更新设置失败' })
   }
-
-  // 不允许直接修改密码
-  if (key === 'auth_password') {
-    return res.status(400).json({ error: '请使用 /api/auth/password 修改密码' })
-  }
-
-  const db = getDb()
-  db.prepare(`
-    INSERT INTO settings (key, value, updated_at)
-    VALUES (?, ?, datetime('now'))
-    ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')
-  `).run(key, value, value)
-
-  res.json({ success: true })
 })
 
 // PUT /api/settings/batch - 批量更新设置
 router.put('/batch', (req, res) => {
-  const { settings } = req.body
-  if (!settings || typeof settings !== 'object') {
-    return res.status(400).json({ error: 'settings object is required' })
-  }
-
-  const db = getDb()
-  const stmt = db.prepare(`
-    INSERT INTO settings (key, value, updated_at)
-    VALUES (?, ?, datetime('now'))
-    ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')
-  `)
-
-  const transaction = db.transaction(() => {
-    for (const [key, value] of Object.entries(settings)) {
-      if (key === 'auth_password') continue // 跳过密码
-      stmt.run(key, value, value)
+  try {
+    const { settings } = req.body
+    if (!settings || typeof settings !== 'object') {
+      return res.status(400).json({ error: 'settings object is required' })
     }
-  })
 
-  transaction()
-  res.json({ success: true })
+    const db = getDb()
+    const stmt = db.prepare(`
+      INSERT INTO settings (key, value, updated_at)
+      VALUES (?, ?, datetime('now'))
+      ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')
+    `)
+
+    const transaction = db.transaction(() => {
+      for (const [key, value] of Object.entries(settings)) {
+        if (key === 'auth_password') continue
+        stmt.run(key, value, value)
+      }
+    })
+    transaction()
+
+    res.json({ success: true })
+  } catch (e) {
+    console.error('批量更新设置失败:', e)
+    res.status(500).json({ error: '批量更新设置失败' })
+  }
 })
 
 module.exports = router

@@ -114,7 +114,11 @@ export const audioApi = {
       method: 'POST',
       headers,
       body: formData
-    }).then(r => r.json())
+    }).then(async r => {
+      const data = await r.json().catch(() => null)
+      if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`)
+      return data
+    })
   },
   update(id, data) {
     return request(`/audio/${id}`, {

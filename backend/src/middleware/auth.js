@@ -1,16 +1,12 @@
 // 简单的 token 认证中间件
 // Token 存储在内存中，重启后失效
 
+const crypto = require('crypto')
 const tokens = new Map()
 
-// 生成随机 token
+// 生成密码学安全的随机 token
 function generateToken() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  let token = ''
-  for (let i = 0; i < 32; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return token
+  return crypto.randomBytes(32).toString('base64url')
 }
 
 // 添加 token

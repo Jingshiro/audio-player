@@ -308,6 +308,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
+  clearTimeout(lyricsAutoScrollTimer)
 })
 
 // 监听当前台词变化，自动滚动（拖拽期间跳过）
@@ -453,22 +454,25 @@ function triggerLrcImport() {
 async function onAudioImport(e) {
   const file = e.target.files[0]
   if (file) {
-    // 保存到音频库（IndexedDB）
-    const audioData = await libraryStore.addAudioFile(file)
-
-    // 加载并播放
-    const loadedAudio = await libraryStore.getAudioFileWithUrl(audioData.id)
-    if (loadedAudio) {
-      const track = {
-        id: audioData.id,
-        name: audioData.name,
-        url: loadedAudio.url
+    try {
+      const audioData = await libraryStore.addAudioFile(file)
+      const loadedAudio = await libraryStore.getAudioFileWithUrl(audioData.id)
+      if (loadedAudio) {
+        const track = {
+          id: audioData.id,
+          name: audioData.name,
+          url: loadedAudio.url
+        }
+        playerStore.addToPlaylist(track)
+        playerStore.loadTrack(track)
+        playerStore.play()
       }
-      playerStore.addToPlaylist(track)
-      playerStore.loadTrack(track)
-      playerStore.play()
+      toastRef.value?.success(`已导入 ${file.name}`)
+    } catch (err) {
+      toastRef.value?.error(`导入失败: ${err.message}`)
     }
   }
+  e.target.value = ''
 }
 
 function onLrcImport(e) {
@@ -516,42 +520,46 @@ async function onDrop(e) {
   isDragOver.value = false
   const files = e.dataTransfer.files
   for (const file of files) {
-    if (file.type.startsWith('audio/')) {
-      // 保存到音频库
-      const audioData = await libraryStore.addAudioFile(file)
-      const loadedAudio = await libraryStore.getAudioFileWithUrl(audioData.id)
-      if (loadedAudio) {
-        const track = {
-          id: audioData.id,
-          name: audioData.name,
-          url: loadedAudio.url
+    try {
+      if (file.type.startsWith('audio/')) {
+        const audioData = await libraryStore.addAudioFile(file)
+        const loadedAudio = await libraryStore.getAudioFileWithUrl(audioData.id)
+        if (loadedAudio) {
+          const track = {
+            id: audioData.id,
+            name: audioData.name,
+            url: loadedAudio.url
+          }
+          playerStore.addToPlaylist(track)
+          if (playerStore.playlist.length === 1) {
+            playerStore.loadTrack(track)
+          }
         }
-        playerStore.addToPlaylist(track)
-        if (playerStore.playlist.length === 1) {
-          playerStore.loadTrack(track)
+        toastRef.value?.success(`已导入 ${file.name}`)
+      } else if (file.name.endsWith('.lrc') || file.name.endsWith('.txt')) {
+        const reader = new FileReader()
+        reader.onload = (event) => {
+          const text = event.target.result
+          const lyrics = parseLRC(text)
+          playerStore.setLyrics(lyrics)
+          playerStore.addLyricSource({
+            id: `lyric_${Date.now()}`,
+            name: file.name.replace(/\.[^/.]+$/, ''),
+            language: 'zh',
+            content: text,
+            lyrics
+          })
+          unifiedSubtitlesStore.addSubtitle({
+            name: file.name.replace(/\.[^/.]+$/, ''),
+            content: text,
+            source: 'import'
+          })
         }
+        reader.readAsText(file)
+        toastRef.value?.success(`已导入 ${file.name}`)
       }
-    } else if (file.name.endsWith('.lrc') || file.name.endsWith('.txt')) {
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        const text = event.target.result
-        const lyrics = parseLRC(text)
-        playerStore.setLyrics(lyrics)
-        playerStore.addLyricSource({
-          id: `lyric_${Date.now()}`,
-          name: file.name.replace(/\.[^/.]+$/, ''),
-          language: 'zh',
-          content: text,
-          lyrics
-        })
-        // 同时保存到台词库（供 AI 工具使用）
-        unifiedSubtitlesStore.addSubtitle({
-          name: file.name.replace(/\.[^/.]+$/, ''),
-          content: text,
-          source: 'import'
-        })
-      }
-      reader.readAsText(file)
+    } catch (err) {
+      toastRef.value?.error(`导入 ${file.name} 失败: ${err.message}`)
     }
   }
 }
@@ -579,15 +587,23 @@ function onLyricSelect() {
 // 绑定台词到当前音频
 async function bindLyric() {
   if (!selectedLyricId.value || !currentAudioId.value) return
-  await unifiedSubtitlesStore.linkToAudio(selectedLyricId.value, currentAudioId.value)
-  toastRef.value?.success('已绑定到当前音频')
+  try {
+    await unifiedSubtitlesStore.linkToAudio(selectedLyricId.value, currentAudioId.value)
+    toastRef.value?.success('已绑定到当前音频')
+  } catch (err) {
+    toastRef.value?.error(`绑定失败: ${err.message}`)
+  }
 }
 
 // 设为默认台词
 async function setDefaultLyric() {
   if (!selectedLyricId.value) return
-  await unifiedSubtitlesStore.setAsDefault(selectedLyricId.value)
-  toastRef.value?.success('已设为默认台词')
+  try {
+    await unifiedSubtitlesStore.setAsDefault(selectedLyricId.value)
+    toastRef.value?.success('已设为默认台词')
+  } catch (err) {
+    toastRef.value?.error(`设置失败: ${err.message}`)
+  }
 }
 
 // 台词内联编辑

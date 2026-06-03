@@ -117,6 +117,7 @@ export const useUnifiedLibraryStore = defineStore('unifiedLibrary', () => {
       // 服务器音频：下载后返回 Blob
       try {
         const response = await fetch(`/api/audio/${id}/stream`)
+        if (!response.ok) throw new Error(`下载失败: HTTP ${response.status}`)
         const blob = await response.blob()
         return blob
       } catch (e) {
@@ -126,7 +127,7 @@ export const useUnifiedLibraryStore = defineStore('unifiedLibrary', () => {
     }
   }
 
-  // 删除音频
+  // 删除音频（服务器删除失败时回滚本地状态）
   async function removeAudio(id) {
     const audio = audioFiles.value.find(f => f.id === id)
     if (!audio) return
@@ -135,7 +136,12 @@ export const useUnifiedLibraryStore = defineStore('unifiedLibrary', () => {
       const libraryStore = useLibraryStore()
       await libraryStore.removeAudioFile(id)
     } else {
-      await audioApi.delete(id)
+      try {
+        await audioApi.delete(id)
+      } catch (e) {
+        console.error('删除服务器音频失败:', e)
+        throw e
+      }
     }
 
     audioFiles.value = audioFiles.value.filter(f => f.id !== id)
