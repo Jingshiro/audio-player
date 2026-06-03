@@ -1211,46 +1211,47 @@ function removeLine(index) {
     font-size: 1.05rem;
     line-height: 1.6;
   }
-  .lyrics-back-btn {
-    display: flex;
-    position: fixed;
-    top: 12px;
-    left: 12px;
-    z-index: 101;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid var(--border-color, #333);
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-primary);
-    cursor: pointer;
-  }
-  .lyrics-back-btn:active {
-    transform: scale(0.9);
-    background: rgba(255,255,255,0.15);
-  }
-  /* 碟片可点击提示 */
-  .disc-tap-area {
-    position: relative;
-    cursor: pointer;
-  }
   .disc-tap-hint {
     display: none;
   }
 }
 
-/* 桌面端隐藏返回按钮和碟片点击提示 */
+/* 桌面端隐藏返回按钮、迷你控制条和碟片点击提示 */
 .lyrics-back-btn { display: none; }
 .lyrics-mini-bar { display: none; }
 .disc-tap-hint { display: none; }
-@media (min-width: 769px) {
-  .disc-tap-area { cursor: default; }
-}
 
-/* 手机端碟片点击提示 */
+/* 手机端：显示返回按钮（仅在歌词全屏模式下） */
 @media (max-width: 768px) {
+  .lyrics-mode .lyrics-back-btn {
+    display: flex;
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 200;
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+    cursor: pointer;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  }
+  .lyrics-back-btn:active {
+    transform: scale(0.9);
+    background: rgba(255,255,255,0.2);
+  }
+
+  /* 手机端碟片点击提示 */
+  .disc-tap-area {
+    position: relative;
+    cursor: pointer;
+  }
   .disc-tap-hint {
     display: flex;
     position: absolute;
@@ -1269,6 +1270,10 @@ function removeLine(index) {
     height: 14px;
     fill: rgba(255,255,255,0.6);
   }
+}
+
+@media (min-width: 769px) {
+  .disc-tap-area { cursor: default; }
 }
 
 /* 手机端歌词全屏迷你控制条 */
