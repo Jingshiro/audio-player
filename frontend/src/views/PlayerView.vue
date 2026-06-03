@@ -109,7 +109,8 @@
       </div>
 
       <!-- 台词显示 -->
-      <div class="lyrics-container" ref="lyricsContainerRef">
+      <div class="lyrics-container" ref="lyricsContainerRef"
+        @pointerdown="onLyricsDragStart" @pointermove="onLyricsDragMove" @pointerup="onLyricsDragEnd" @pointercancel="onLyricsDragEnd">
         <div class="lyrics-scroll" ref="lyricsScrollRef">
           <!-- 无台词提示 -->
           <div class="no-lyrics" v-if="playerStore.lyrics.length === 0">
@@ -250,6 +251,12 @@ const isDragging = ref(false)
 const dragProgress = ref(0)
 const dragTime = ref(0)
 
+// 歌词容器拖拽滚动状态
+const isLyricsDragging = ref(false)
+const lyricsDragStartY = ref(0)
+const lyricsDragOffset = ref(0)
+let lyricsAutoScrollTimer = null
+
 // 台词选择
 const selectedLyricId = ref('')
 
@@ -303,8 +310,9 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
 })
 
-// 监听当前台词变化，自动滚动
+// 监听当前台词变化，自动滚动（拖拽期间跳过）
 watch(() => playerStore.currentLyricIndex, (newIndex) => {
+  if (isLyricsDragging.value) return
   if (newIndex >= 0) {
     scrollToLyric(newIndex)
   }
@@ -334,6 +342,53 @@ function seekToLyric(time) {
   if (wasPlaying) playerStore.pause()
   playerStore.seek(time)
   if (wasPlaying) playerStore.play()
+}
+
+// 歌词容器拖拽滚动
+function onLyricsDragStart(e) {
+  // 忽略编辑模式下的输入框拖拽
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+  isLyricsDragging.value = true
+  lyricsDragStartY.value = e.clientY
+  // 记录当前 transform 的偏移量
+  const scroll = lyricsScrollRef.value
+  if (scroll) {
+    const style = scroll.style.transform
+    const match = style.match(/translateY\((.+?)px\)/)
+    lyricsDragOffset.value = match ? -parseFloat(match[1]) : 0
+  }
+  // 拖拽时禁用过渡动画
+  if (scroll) scroll.style.transition = 'none'
+  const container = lyricsContainerRef.value
+  if (container) container.setPointerCapture(e.pointerId)
+}
+
+function onLyricsDragMove(e) {
+  if (!isLyricsDragging.value) return
+  const delta = e.clientY - lyricsDragStartY.value
+  const newOffset = lyricsDragOffset.value + delta
+  const scroll = lyricsScrollRef.value
+  if (scroll) {
+    scroll.style.transform = `translateY(${-newOffset}px)`
+  }
+}
+
+function onLyricsDragEnd(e) {
+  if (!isLyricsDragging.value) return
+  isLyricsDragging.value = false
+  const scroll = lyricsScrollRef.value
+  if (scroll) {
+    // 恢复过渡动画
+    scroll.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1)'
+  }
+  // 延迟恢复自动滚动（让用户松手后能浏览一下，2秒后跟回当前播放行）
+  clearTimeout(lyricsAutoScrollTimer)
+  lyricsAutoScrollTimer = setTimeout(() => {
+    lyricsDragOffset.value = 0
+    if (playerStore.currentLyricIndex >= 0) {
+      scrollToLyric(playerStore.currentLyricIndex)
+    }
+  }, 2000)
 }
 
 // 进度条拖拽
@@ -896,6 +951,9 @@ function removeLine(index) {
   flex: 1;
   overflow: hidden;
   position: relative;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
   mask-image: linear-gradient(
     180deg,
     transparent 0%,
