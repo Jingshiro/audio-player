@@ -322,6 +322,10 @@ onMounted(async () => {
   hasBackend.value = await checkBackend()
   await unifiedLibraryStore.loadAll()
   await unifiedSubtitlesStore.loadAll()
+  // 从服务器加载 API 预设
+  if (hasBackend.value) {
+    await aiStore.loadApiPresetsFromServer()
+  }
 })
 
 async function saveAsApiPreset(section) {

@@ -10,15 +10,45 @@ export const useAIStore = defineStore('ai', () => {
     const id = 'ap_' + Date.now()
     apiPresets.value.push({ id, name, baseUrl, apiKey, model })
     saveApiPresets()
+    syncApiPresetsToServer()
   }
 
   function deleteApiPreset(id) {
     apiPresets.value = apiPresets.value.filter(p => p.id !== id)
     saveApiPresets()
+    syncApiPresetsToServer()
   }
 
   function saveApiPresets() {
     localStorage.setItem('api_presets', JSON.stringify(apiPresets.value))
+  }
+
+  // ===== 同步 API 预设到服务器 =====
+  async function syncApiPresetsToServer() {
+    if (!getAuthToken()) return
+    try {
+      await settingsApi.set('api_presets', JSON.stringify(apiPresets.value))
+    } catch (e) {
+      console.warn('同步 API 预设到服务器失败:', e)
+    }
+  }
+
+  // ===== 从服务器加载 API 预设 =====
+  async function loadApiPresetsFromServer() {
+    if (!getAuthToken()) return
+    try {
+      const settings = await settingsApi.get()
+      if (settings.api_presets) {
+        const serverPresets = JSON.parse(settings.api_presets)
+        // 合并：服务器的预设 + 本地独有的预设（避免丢失本地新增的）
+        const localIds = new Set(apiPresets.value.map(p => p.id))
+        const serverOnly = serverPresets.filter(p => !localIds.has(p.id))
+        apiPresets.value = [...apiPresets.value, ...serverOnly]
+        saveApiPresets()
+      }
+    } catch (e) {
+      console.warn('从服务器加载 API 预设失败:', e)
+    }
   }
 
   // ===== 兼容旧配置迁移 =====
@@ -143,6 +173,7 @@ export const useAIStore = defineStore('ai', () => {
     addApiPreset, deleteApiPreset, applyApiPreset,
     selectProvider, saveSectionConfig,
     saveSTTPrompt, saveTranslatePrompt,
-    startGeneration, updateProgress, appendResult, stopGeneration, clearResult
+    startGeneration, updateProgress, appendResult, stopGeneration, clearResult,
+    loadApiPresetsFromServer
   }
 })
