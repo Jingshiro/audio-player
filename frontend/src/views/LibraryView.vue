@@ -157,28 +157,26 @@
     <input type="file" ref="serverFileInputRef" accept="audio/*" multiple style="display:none" @change="onServerUpload">
 
     <!-- 编辑台词弹窗 -->
-    <div class="modal-overlay" v-if="editingSubtitle" @click.self="editingSubtitle = null">
-      <div class="modal glass-card">
-        <div class="modal-header">
-          <h3>编辑台词</h3>
-          <button class="close-btn" @click="editingSubtitle = null">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>名称</label>
-            <input type="text" class="input" v-model="editingSubtitle.name">
-          </div>
-          <div class="form-group">
-            <label>内容</label>
-            <textarea class="textarea" v-model="editingSubtitle.content" rows="10"></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="editingSubtitle = null">取消</button>
-          <button class="btn-primary" @click="saveSubtitleEdit">保存</button>
-        </div>
+    <BaseModal v-model="showEditModal" title="编辑台词">
+      <div class="form-group">
+        <label>名称</label>
+        <input type="text" class="input" v-model="editingSubtitle.name">
       </div>
-    </div>
+      <div class="form-group">
+        <label>内容</label>
+        <textarea class="textarea" v-model="editingSubtitle.content" rows="10"></textarea>
+      </div>
+      <template #footer>
+        <button class="btn-secondary" @click="showEditModal = false">取消</button>
+        <button class="btn-primary" @click="saveSubtitleEdit">保存</button>
+      </template>
+    </BaseModal>
+
+    <!-- 确认弹窗 -->
+    <ConfirmDialog ref="confirmRef" />
+
+    <!-- Toast -->
+    <Toast ref="toastRef" />
   </div>
 </template>
 
@@ -192,6 +190,9 @@ import { useUnifiedLibraryStore } from '../stores/unifiedLibrary'
 import { useUnifiedSubtitlesStore } from '../stores/unifiedSubtitles'
 import { parseLRC } from '../utils/lrcParser'
 import { audioApi, checkBackend } from '../api'
+import BaseModal from '../components/BaseModal.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import Toast from '../components/Toast.vue'
 
 const router = useRouter()
 const libraryStore = useLibraryStore()
@@ -199,20 +200,22 @@ const subtitlesStore = useSubtitlesStore()
 const playerStore = usePlayerStore()
 const unifiedLibraryStore = useUnifiedLibraryStore()
 const unifiedSubtitlesStore = useUnifiedSubtitlesStore()
+const confirmRef = ref(null)
+const toastRef = ref(null)
 
 const fileInputRef = ref(null)
 const serverFileInputRef = ref(null)
 const searchQuery = ref('')
 const activeTab = ref('audio')
-const filterSource = ref('all') // 'all' | 'local' | 'server'
+const filterSource = ref('all')
 const serverAvailable = ref(false)
 
 // 搜索防抖
 let searchTimer = null
-function debounceSearch(value) {
+function onSearch() {
   clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
-    libraryStore.setSearchQuery(value)
+    // 搜索直接使用本地 ref, filteredSubtitles 计算属性会自动响应
   }, 200)
 }
 
@@ -222,6 +225,7 @@ const editingName = ref('')
 const renameInputRef = ref(null)
 
 // 编辑台词弹窗
+const showEditModal = ref(false)
 const editingSubtitle = ref(null)
 
 // 过滤台词
@@ -253,8 +257,6 @@ const serverSubtitlesCount = computed(() => unifiedSubtitlesStore.serverCount)
 onMounted(async () => {
   await unifiedLibraryStore.loadAll()
   await unifiedSubtitlesStore.loadAll()
-
-  // 检查后端是否可用
   serverAvailable.value = await checkBackend()
 })
 
@@ -262,10 +264,6 @@ onMounted(async () => {
 async function refreshData() {
   await unifiedLibraryStore.loadAll()
   await unifiedSubtitlesStore.loadAll()
-}
-
-function onSearch() {
-  debounceSearch(searchQuery.value)
 }
 
 function triggerImport() {
@@ -295,8 +293,9 @@ async function onServerUpload(e) {
         formData.append('name', file.name)
         await audioApi.upload(formData)
         await refreshData()
+        toastRef.value?.success('上传成功')
       } catch (err) {
-        alert('上传失败: ' + err.message)
+        toastRef.value?.error('上传失败: ' + err.message)
       }
     }
   }
@@ -329,7 +328,7 @@ function getSourceLabel(source) {
 async function playAudio(audio) {
   const audioData = await unifiedLibraryStore.getAudioWithUrl(audio.id)
   if (!audioData || !audioData.url) {
-    alert('无法加载音频文件')
+    toastRef.value?.error('无法加载音频文件')
     return
   }
 
@@ -347,7 +346,12 @@ async function playAudio(audio) {
 }
 
 async function deleteAudio(audio) {
-  if (confirm(`确定要删除 "${audio.name}" 吗？`)) {
+  const confirmed = await confirmRef.value?.show({
+    title: '删除确认',
+    message: `确定要删除 "${audio.name}" 吗？`,
+    danger: true
+  })
+  if (confirmed) {
     await unifiedLibraryStore.removeAudio(audio.id)
   }
 }
@@ -376,6 +380,7 @@ async function saveRename(id) {
 // 编辑台词
 function editSubtitle(sub) {
   editingSubtitle.value = { ...sub }
+  showEditModal.value = true
 }
 
 async function saveSubtitleEdit() {
@@ -384,12 +389,18 @@ async function saveSubtitleEdit() {
       name: editingSubtitle.value.name,
       content: editingSubtitle.value.content
     })
-    editingSubtitle.value = null
+    showEditModal.value = false
+    toastRef.value?.success('台词已保存')
   }
 }
 
 async function deleteSubtitle(sub) {
-  if (confirm(`确定要删除 "${sub.name}" 吗？`)) {
+  const confirmed = await confirmRef.value?.show({
+    title: '删除确认',
+    message: `确定要删除 "${sub.name}" 吗？`,
+    danger: true
+  })
+  if (confirmed) {
     await unifiedSubtitlesStore.deleteSubtitle(sub.id)
   }
 }
@@ -610,22 +621,6 @@ async function deleteSubtitle(sub) {
   background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
 }
 
-.section-header {
-  margin: 16px 0 8px 0;
-}
-
-.section-header:first-child {
-  margin-top: 0;
-}
-
-.section-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
 .item-actions {
   display: flex;
   gap: 8px;
@@ -662,58 +657,7 @@ async function deleteSubtitle(sub) {
   margin-bottom: 16px;
 }
 
-/* 弹窗 */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal {
-  width: 500px;
-  max-width: 90vw;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 24px;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.modal-body {
-  flex: 1;
-  overflow-y: auto;
-  margin-bottom: 20px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
+/* 表单组 */
 .form-group {
   display: flex;
   flex-direction: column;
@@ -755,11 +699,6 @@ async function deleteSubtitle(sub) {
     margin-top: 8px;
     padding-top: 8px;
     border-top: 1px solid var(--border-light);
-  }
-
-  .modal {
-    width: 95vw;
-    max-height: 90vh;
   }
 }
 </style>

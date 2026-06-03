@@ -11,7 +11,7 @@
           <div class="preset-item-actions">
             <button class="btn-sm btn-secondary" @click="applyPresetTo(preset, 'stt')">用于STT</button>
             <button class="btn-sm btn-secondary" @click="applyPresetTo(preset, 'translate')">用于翻译</button>
-            <button class="btn-sm btn-danger" @click="deletePreset(preset.id)">删除</button>
+            <button class="btn-sm btn-danger" @click="handleDeletePreset(preset.id)">删除</button>
           </div>
         </div>
       </div>
@@ -28,7 +28,7 @@
             @click="aiStore.selectProvider(preset.id, preset, 'stt')">{{ preset.name }}</button>
         </div>
       </div>
-      <div class="settings-grid">
+      <div class="grid-3">
         <div class="form-group">
           <label>API地址</label>
           <input type="text" class="input" v-model="aiStore.sttConfig.baseUrl" placeholder="https://api.openai.com/v1">
@@ -68,7 +68,7 @@
             @click="aiStore.selectProvider(preset.id, preset, 'translate')">{{ preset.name }}</button>
         </div>
       </div>
-      <div class="settings-grid">
+      <div class="grid-3">
         <div class="form-group">
           <label>API地址</label>
           <input type="text" class="input" v-model="aiStore.translateConfig.baseUrl" placeholder="https://api.openai.com/v1">
@@ -100,7 +100,7 @@
     <!-- 破限词配置 -->
     <div class="glass-card prompt-config">
       <div class="section-title">破限词配置</div>
-      <div class="prompt-grid">
+      <div class="grid-2">
         <div class="form-group">
           <label>STT 破限词</label>
           <textarea class="textarea" v-model="sttPrompt"
@@ -259,24 +259,22 @@
     </div>
 
     <!-- 预设保存弹窗 -->
-    <div class="modal-overlay" v-if="showPresetManager" @click.self="showPresetManager = false">
-      <div class="modal glass-card">
-        <div class="modal-header">
-          <h3>另存预设</h3>
-          <button class="close-btn" @click="showPresetManager = false">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>预设名称</label>
-            <input type="text" class="input" v-model="presetName" placeholder="输入预设名称">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="showPresetManager = false">取消</button>
-          <button class="btn-primary" @click="saveAsPreset" :disabled="!presetName">保存</button>
-        </div>
+    <BaseModal v-model="showPresetManager" title="另存预设" width="400px">
+      <div class="form-group">
+        <label>预设名称</label>
+        <input type="text" class="input" v-model="presetName" placeholder="输入预设名称">
       </div>
-    </div>
+      <template #footer>
+        <button class="btn-secondary" @click="showPresetManager = false">取消</button>
+        <button class="btn-primary" @click="saveAsPreset" :disabled="!presetName">保存</button>
+      </template>
+    </BaseModal>
+
+    <!-- 确认弹窗 -->
+    <ConfirmDialog ref="confirmRef" />
+
+    <!-- Toast -->
+    <Toast ref="toastRef" />
   </div>
 </template>
 
@@ -288,14 +286,18 @@ import { useUnifiedLibraryStore } from '../stores/unifiedLibrary'
 import { useUnifiedSubtitlesStore } from '../stores/unifiedSubtitles'
 import { MODEL_PRESETS } from '../utils/modelPresets'
 import { aiApi, checkBackend } from '../api'
+import BaseModal from '../components/BaseModal.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import Toast from '../components/Toast.vue'
 
 const aiStore = useAIStore()
 const promptStore = usePromptStore()
 const unifiedLibraryStore = useUnifiedLibraryStore()
 const unifiedSubtitlesStore = useUnifiedSubtitlesStore()
+const confirmRef = ref(null)
+const toastRef = ref(null)
 
 const hasBackend = ref(false)
-onMounted(async () => { hasBackend.value = await checkBackend() })
 const modelPresets = Object.values(MODEL_PRESETS)
 
 const sttPrompt = ref(aiStore.sttPrompt)
@@ -315,22 +317,41 @@ const translateModels = ref([])
 const isLoadingSttModels = ref(false)
 const isLoadingTranslateModels = ref(false)
 
-function saveAsApiPreset(section) {
-  const cfg = section === 'stt' ? aiStore.sttConfig : aiStore.translateConfig
-  const name = prompt('预设名称：', '')
-  if (!name) return
-  aiStore.addApiPreset(name, cfg.baseUrl, cfg.apiKey, cfg.model)
-}
-function applyPresetTo(preset, section) { aiStore.applyApiPreset(preset, section) }
-function deletePreset(id) { if (confirm('确定删除？')) aiStore.deleteApiPreset(id) }
+// 合并为单个 onMounted
+onMounted(async () => {
+  hasBackend.value = await checkBackend()
+  await unifiedLibraryStore.loadAll()
+  await unifiedSubtitlesStore.loadAll()
+})
 
-onMounted(async () => { await unifiedLibraryStore.loadAll(); await unifiedSubtitlesStore.loadAll() })
+async function saveAsApiPreset(section) {
+  const cfg = section === 'stt' ? aiStore.sttConfig : aiStore.translateConfig
+  // 使用 BaseModal 替代 window.prompt
+  presetName.value = ''
+  showPresetManager.value = true
+  // 保存操作在 saveAsPreset 中处理, 这里记录 section
+  pendingPresetSection.value = section
+}
+
+const pendingPresetSection = ref('')
+
+function applyPresetTo(preset, section) { aiStore.applyApiPreset(preset, section) }
+
+async function handleDeletePreset(id) {
+  const confirmed = await confirmRef.value?.show({
+    title: '删除确认',
+    message: '确定删除此预设？',
+    danger: true
+  })
+  if (confirmed) aiStore.deleteApiPreset(id)
+}
+
 const localAudios = computed(() => unifiedLibraryStore.localAudios)
 const serverAudios = computed(() => unifiedLibraryStore.serverAudios)
 const localSubtitles = computed(() => unifiedSubtitlesStore.localSubtitles)
 const serverSubtitles = computed(() => unifiedSubtitlesStore.serverSubtitles)
 
-// 追踪最后一次生成操作的类型，避免命名混乱
+// 追踪最后一次生成操作的类型
 const lastGeneratedType = ref('')
 
 function detectApiFormat(baseUrl) {
@@ -347,7 +368,7 @@ async function fetchModels(section) {
   const cfg = section === 'stt' ? aiStore.sttConfig : aiStore.translateConfig
   const setLoading = section === 'stt' ? (v) => { isLoadingSttModels.value = v } : (v) => { isLoadingTranslateModels.value = v }
   const setModels = section === 'stt' ? (v) => { sttModels.value = v } : (v) => { translateModels.value = v }
-  if (!cfg.apiKey || !cfg.baseUrl) { alert('请先填写 API 地址和密钥'); return }
+  if (!cfg.apiKey || !cfg.baseUrl) { toastRef.value?.warning('请先填写 API 地址和密钥'); return }
   setLoading(true)
   try {
     let models = []
@@ -366,20 +387,33 @@ async function fetchModels(section) {
     }
     setModels(models)
     if (models.length > 0 && !models.find(m => m.id === cfg.model)) cfg.model = models[0].id
-  } catch (e) { console.error('拉取模型列表失败:', e); alert('拉取模型列表失败: ' + e.message) }
+  } catch (e) { console.error('拉取模型列表失败:', e); toastRef.value?.error('拉取模型列表失败: ' + e.message) }
   finally { setLoading(false) }
 }
 
-function savePrompts() { aiStore.saveSTTPrompt(sttPrompt.value); aiStore.saveTranslatePrompt(translatePrompt.value); alert('破限词已保存') }
-function loadPromptPreset() {
+function savePrompts() {
+  aiStore.saveSTTPrompt(sttPrompt.value)
+  aiStore.saveTranslatePrompt(translatePrompt.value)
+  toastRef.value?.success('破限词已保存')
+}
+
+function loadPreset() {
   if (!selectedPresetId.value) return
   const p = promptStore.getPreset(selectedPresetId.value)
-  if (p) { sttPrompt.value = p.sttPrompt; translatePrompt.value = p.translatePrompt; aiStore.saveSTTPrompt(p.sttPrompt); aiStore.saveTranslatePrompt(p.translatePrompt) }
+  if (p) {
+    sttPrompt.value = p.sttPrompt
+    translatePrompt.value = p.translatePrompt
+    aiStore.saveSTTPrompt(p.sttPrompt)
+    aiStore.saveTranslatePrompt(p.translatePrompt)
+  }
 }
-function savePromptPreset() {
+
+function saveAsPreset() {
   if (!presetName.value) return
   promptStore.createPreset(presetName.value, sttPrompt.value, translatePrompt.value)
-  showPresetManager.value = false; presetName.value = ''; alert('预设已保存')
+  showPresetManager.value = false
+  presetName.value = ''
+  toastRef.value?.success('预设已保存')
 }
 
 function uint8ArrayToBase64(bytes) {
@@ -391,7 +425,7 @@ function uint8ArrayToBase64(bytes) {
 
 async function startSTT() {
   const cfg = aiStore.sttConfig
-  if (!selectedAudioId.value || !cfg.apiKey) { alert('请先配置STT的API密钥并选择音频文件'); return }
+  if (!selectedAudioId.value || !cfg.apiKey) { toastRef.value?.warning('请先配置STT的API密钥并选择音频文件'); return }
   aiStore.startGeneration()
   lastGeneratedType.value = 'stt'
   try {
@@ -431,14 +465,14 @@ async function startSTT() {
       content = fmt === 'gemini' ? (data.candidates?.[0]?.content?.parts?.[0]?.text || '') : (data.choices?.[0]?.message?.content || '')
     }
     if (content) aiStore.appendResult(content)
-    else aiStore.appendResult('[⚠️ 空内容]\n' + JSON.stringify(result?._raw || result || {}, null, 2))
+    else aiStore.appendResult('[空内容]')
     aiStore.stopGeneration()
-  } catch (e) { console.error('STT 失败:', e); aiStore.stopGeneration(); alert('STT 失败: ' + e.message) }
+  } catch (e) { console.error('STT 失败:', e); aiStore.stopGeneration(); toastRef.value?.error('STT 失败: ' + e.message) }
 }
 
 async function startTranslate() {
   const cfg = aiStore.translateConfig
-  if (!translateInput.value || !cfg.apiKey) { alert('请先配置翻译API密钥并输入台词'); return }
+  if (!translateInput.value || !cfg.apiKey) { toastRef.value?.warning('请先配置翻译API密钥并输入台词'); return }
   aiStore.startGeneration()
   lastGeneratedType.value = 'translate'
   try {
@@ -459,7 +493,7 @@ async function startTranslate() {
     }
     if (content) aiStore.appendResult(content)
     aiStore.stopGeneration()
-  } catch (e) { console.error('翻译失败:', e); aiStore.stopGeneration(); alert('翻译失败: ' + e.message) }
+  } catch (e) { console.error('翻译失败:', e); aiStore.stopGeneration(); toastRef.value?.error('翻译失败: ' + e.message) }
 }
 
 function onSubtitleSelect() { const s = unifiedSubtitlesStore.getSubtitle(selectedSubtitleId.value); translateInput.value = s?.content || '' }
@@ -467,23 +501,27 @@ function triggerTranslateLrcImport() { translateLrcInputRef.value?.click() }
 function onTranslateLrcSelect(e) { const f = e.target.files[0]; if (f) importLrcToSubtitles(f); e.target.value = '' }
 async function importLrcToSubtitles(file) {
   try { const t = await file.text(); const s = await unifiedSubtitlesStore.addSubtitle({ name: file.name.replace(/\.[^/.]+$/, ''), content: t, source: 'import' }); selectedSubtitleId.value = s.id; translateInput.value = s.content }
-  catch (e) { alert('导入失败: ' + e.message) }
+  catch (e) { toastRef.value?.error('导入失败: ' + e.message) }
 }
-async function deleteSubtitle(id) { if (confirm('确定删除？')) { await unifiedSubtitlesStore.deleteSubtitle(id); if (selectedSubtitleId.value === id) { selectedSubtitleId.value = ''; translateInput.value = '' } } }
+async function handleDeleteSubtitle(id) {
+  const confirmed = await confirmRef.value?.show({ title: '删除确认', message: '确定删除？', danger: true })
+  if (confirmed) {
+    await unifiedSubtitlesStore.deleteSubtitle(id)
+    if (selectedSubtitleId.value === id) { selectedSubtitleId.value = ''; translateInput.value = '' }
+  }
+}
 function saveTranslateLang(k, v) { localStorage.setItem(k, v) }
 function getLanguageName(c) { return { ja: '日语', en: '英语', ko: '韩语', zh: '中文' }[c] || c }
+
 async function saveResult() {
   if (!aiStore.generationResult) return
   const type = lastGeneratedType.value || 'stt'
 
-  // 构建文件名基础
   let baseName = '未知'
   if (type === 'translate' && selectedSubtitleId.value) {
-    // 翻译：用来源台词名（去掉 [STT]- 前缀和后缀名）
     const src = unifiedSubtitlesStore.getSubtitle(selectedSubtitleId.value)
     if (src) baseName = src.name.replace(/^\[STT\]-/, '').replace(/\.[^.]+$/, '')
   } else if (selectedAudioId.value) {
-    // STT 或翻译无来源台词：用音频名（去后缀）
     const audio = unifiedLibraryStore.audioFiles.find(a => a.id === selectedAudioId.value)
     if (audio) baseName = audio.name.replace(/\.[^.]+$/, '')
   }
@@ -494,8 +532,9 @@ async function saveResult() {
     source: type,
     audioId: selectedAudioId.value || null
   })
-  alert('台词已保存')
+  toastRef.value?.success('台词已保存')
 }
+
 function retryGeneration() { aiStore.clearResult(); startSTT() }
 function discardResult() { aiStore.clearResult() }
 </script>
@@ -514,14 +553,6 @@ function discardResult() { aiStore.clearResult() }
   padding: 24px;
 }
 
-/* 设置网格 */
-.settings-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
 .form-group {
   display: flex;
   flex-direction: column;
@@ -532,24 +563,6 @@ function discardResult() { aiStore.clearResult() }
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
-}
-
-/* AI 设置提示 */
-.settings-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: rgba(255, 107, 157, 0.1);
-  border: 1px solid rgba(255, 107, 157, 0.2);
-  border-radius: var(--radius-sm);
-  margin-bottom: 16px;
-  font-size: 13px;
-  color: var(--accent-primary);
-}
-
-.settings-hint svg {
-  flex-shrink: 0;
 }
 
 .form-hint {
@@ -566,179 +579,44 @@ function discardResult() { aiStore.clearResult() }
   flex: 1;
 }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-/* 台词选择器 */
-.lyric-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.lyric-picker-item {
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-}
-
-.lyric-picker-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-}
-
-.lyric-picker-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.lyric-pick-btn {
-  padding: 4px 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  color: var(--text-muted);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.lyric-pick-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-secondary);
-}
-
-.lyric-pick-btn.active {
-  background: var(--accent-gradient);
-  border-color: transparent;
-  color: white;
-}
-
-/* 文件拖放区域 */
-.file-drop {
-  padding: 16px;
-  border: 2px dashed var(--border-color);
-  border-radius: var(--radius-md);
-  text-align: center;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  color: var(--text-muted);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.file-drop:hover {
-  border-color: var(--accent-primary);
-  background: rgba(255, 107, 157, 0.05);
-}
-
-.file-drop svg {
-  fill: var(--text-dim);
-}
-
-.file-drop p {
-  font-size: 12px;
-  margin: 0;
-}
-
-/* 台词库列表 */
-.subtitle-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
-  max-height: 150px;
-  overflow-y: auto;
-}
-
-.subtitle-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.subtitle-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.subtitle-item.active {
-  background: var(--accent-gradient);
-  border-color: transparent;
-  color: white;
-}
-
-.subtitle-name {
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.subtitle-delete {
-  background: none;
-  border: none;
-  color: inherit;
-  opacity: 0.5;
-  cursor: pointer;
-  padding: 2px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-}
-
-.subtitle-delete:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-/* 台词选择行 */
-.subtitle-select-row {
-  display: flex;
-  gap: 8px;
-}
-
-.subtitle-select-row .select {
-  flex: 1;
-}
-
-/* 破限词配置 */
-.prompt-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.prompt-actions {
+/* 配置操作按钮 */
+.config-actions {
   display: flex;
   gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
 }
 
-.preset-select {
-  width: auto;
-  min-width: 150px;
-  flex: 1;
+/* API 预设列表 */
+.preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preset-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.preset-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.preset-detail {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.preset-item-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
 }
 
 /* 服务提供商预设选择器 */
@@ -770,6 +648,20 @@ function discardResult() { aiStore.clearResult() }
   color: white;
 }
 
+/* 破限词配置 */
+.prompt-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.preset-select {
+  width: auto;
+  min-width: 150px;
+  flex: 1;
+}
+
 /* 台词来源切换 */
 .source-tabs {
   display: flex;
@@ -798,6 +690,16 @@ function discardResult() { aiStore.clearResult() }
 .source-tab.active {
   background: var(--accent-gradient);
   color: white;
+}
+
+/* 台词选择行 */
+.subtitle-select-row {
+  display: flex;
+  gap: 8px;
+}
+
+.subtitle-select-row .select {
+  flex: 1;
 }
 
 /* 工具网格 */
@@ -860,72 +762,7 @@ function discardResult() { aiStore.clearResult() }
   gap: 12px;
 }
 
-/* 弹窗 */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal {
-  width: 400px;
-  max-width: 90vw;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 24px;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  color: var(--text-primary);
-}
-
-.modal-body {
-  margin-bottom: 20px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
 /* 响应式 */
-@media (max-width: 900px) {
-  .settings-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .prompt-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .tools-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (max-width: 768px) {
   .prompt-actions {
     flex-direction: column;
@@ -939,6 +776,10 @@ function discardResult() { aiStore.clearResult() }
   .preset-select {
     width: 100%;
     min-width: 0;
+  }
+
+  .tools-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

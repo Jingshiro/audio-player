@@ -22,11 +22,12 @@
 
       <!-- 进度条 -->
       <div class="progress-container">
-        <div class="progress-bar" ref="progressBarRef" @click="onProgressClick">
-          <div class="progress-fill" :style="{ width: playerStore.progress + '%' }"></div>
+        <div class="progress-bar" ref="progressBarRef"
+          @pointerdown="onProgressDown" @pointermove="onProgressMove" @pointerup="onProgressUp">
+          <div class="progress-fill" :style="{ width: (isDragging ? dragProgress : playerStore.progress) + '%' }"></div>
         </div>
         <div class="time-info">
-          <span>{{ formatTime(playerStore.currentTime) }}</span>
+          <span>{{ formatTime(isDragging ? dragTime : playerStore.currentTime) }}</span>
           <span>{{ formatTime(playerStore.duration) }}</span>
         </div>
       </div>
@@ -68,13 +69,13 @@
       </div>
     </div>
 
+    <!-- 手机端歌词模式下的返回按钮（放在 .player-right 外面避免层叠问题） -->
+    <button class="lyrics-back-btn" @click="toggleLyricsMode">
+      <svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+    </button>
+
     <!-- 右侧台词区 -->
     <div class="player-right">
-      <!-- 手机端歌词模式下的返回按钮 -->
-      <button class="lyrics-back-btn" @click="toggleLyricsMode">
-        <svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
-      </button>
-
       <!-- 台词选择器 -->
       <div class="lyrics-header">
         <span>台词</span>
@@ -177,10 +178,14 @@
 
     <!-- 手机端歌词全屏迷你控制条 -->
     <div class="lyrics-mini-bar" v-if="lyricsMode">
+      <button class="mini-nav-btn" @click.stop="playerStore.playPrev()">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+      </button>
       <div class="mini-track-info">
         <div class="mini-track-name">{{ playerStore.currentTrack?.name || '未选择音频' }}</div>
-        <div class="mini-progress-bar">
-          <div class="mini-progress-fill" :style="{ width: playerStore.progress + '%' }"></div>
+        <div class="mini-progress-bar" ref="miniProgressRef"
+          @pointerdown="onMiniProgressDown" @pointermove="onProgressMove" @pointerup="onProgressUp">
+          <div class="mini-progress-fill" :style="{ width: (isDragging ? dragProgress : playerStore.progress) + '%' }"></div>
         </div>
       </div>
       <button class="mini-play-btn" @click.stop="playerStore.togglePlay()">
@@ -190,6 +195,9 @@
         <svg viewBox="0 0 24 24" v-else>
           <path fill="currentColor" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
         </svg>
+      </button>
+      <button class="mini-nav-btn" @click.stop="playerStore.playNext()">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
       </button>
     </div>
 
@@ -202,24 +210,30 @@
         <p>拖放音频或台词文件到此处</p>
       </div>
     </div>
+
+    <!-- Toast -->
+    <Toast ref="toastRef" />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { usePlayerStore } from '../stores/player'
 import { useLibraryStore } from '../stores/library'
 import { useUnifiedSubtitlesStore } from '../stores/unifiedSubtitles'
-import { parseLRC, formatTime, formatTimeDetailed, extractMeta } from '../utils/lrcParser'
+import { parseLRC, formatTime, formatTimeDetailed } from '../utils/lrcParser'
+import Toast from '../components/Toast.vue'
 
 const playerStore = usePlayerStore()
 const libraryStore = useLibraryStore()
 const unifiedSubtitlesStore = useUnifiedSubtitlesStore()
+const toastRef = ref(null)
 
 // DOM 引用
 const audioInputRef = ref(null)
 const lrcInputRef = ref(null)
 const progressBarRef = ref(null)
+const miniProgressRef = ref(null)
 const lyricsContainerRef = ref(null)
 const lyricsScrollRef = ref(null)
 const contentInputRef = ref(null)
@@ -230,6 +244,11 @@ const editingContent = ref('')
 
 // 拖拽状态
 const isDragOver = ref(false)
+
+// 进度条拖拽状态
+const isDragging = ref(false)
+const dragProgress = ref(0)
+const dragTime = ref(0)
 
 // 台词选择
 const selectedLyricId = ref('')
@@ -268,6 +287,22 @@ onMounted(async () => {
   await unifiedSubtitlesStore.loadAll()
 })
 
+// 键盘快捷键
+function handleKeydown(e) {
+  if (e.code === 'Space' && editingIndex.value === -1) {
+    e.preventDefault()
+    playerStore.togglePlay()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+})
+
 // 监听当前台词变化，自动滚动
 watch(() => playerStore.currentLyricIndex, (newIndex) => {
   if (newIndex >= 0) {
@@ -301,11 +336,47 @@ function seekToLyric(time) {
   }
 }
 
-// 进度条点击
-function onProgressClick(e) {
-  const rect = progressBarRef.value.getBoundingClientRect()
-  const pos = (e.clientX - rect.left) / rect.width
-  playerStore.seek(pos * playerStore.duration)
+// 进度条拖拽
+function getProgressFromEvent(e, el) {
+  if (!el) return 0
+  const rect = el.getBoundingClientRect()
+  const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+  return pos
+}
+
+function onProgressDown(e) {
+  isDragging.value = true
+  const el = progressBarRef.value
+  const pos = getProgressFromEvent(e, el)
+  dragProgress.value = pos * 100
+  dragTime.value = pos * playerStore.duration
+  el.setPointerCapture(e.pointerId)
+}
+
+function onMiniProgressDown(e) {
+  isDragging.value = true
+  const el = miniProgressRef.value
+  const pos = getProgressFromEvent(e, el)
+  dragProgress.value = pos * 100
+  dragTime.value = pos * playerStore.duration
+  el.setPointerCapture(e.pointerId)
+}
+
+function onProgressMove(e) {
+  if (!isDragging.value) return
+  const el = progressBarRef.value || miniProgressRef.value
+  const pos = getProgressFromEvent(e, el)
+  dragProgress.value = pos * 100
+  dragTime.value = pos * playerStore.duration
+}
+
+function onProgressUp(e) {
+  if (!isDragging.value) return
+  isDragging.value = false
+  playerStore.seek(dragTime.value)
+  if (!playerStore.isPlaying) {
+    playerStore.play()
+  }
 }
 
 // 音量变化
@@ -350,14 +421,13 @@ function onLrcImport(e) {
     reader.onload = (event) => {
       const text = event.target.result
       const lyrics = parseLRC(text)
-      const meta = extractMeta(text)
 
       playerStore.setLyrics(lyrics)
 
       // 添加为台词源
       playerStore.addLyricSource({
         id: `lyric_${Date.now()}`,
-        name: meta.ti || file.name.replace(/\.[^/.]+$/, ''),
+        name: file.name.replace(/\.[^/.]+$/, ''),
         language: 'zh',
         content: text,
         lyrics
@@ -453,14 +523,14 @@ function onLyricSelect() {
 async function bindLyric() {
   if (!selectedLyricId.value || !currentAudioId.value) return
   await unifiedSubtitlesStore.linkToAudio(selectedLyricId.value, currentAudioId.value)
-  alert('已绑定到当前音频')
+  toastRef.value?.success('已绑定到当前音频')
 }
 
 // 设为默认台词
 async function setDefaultLyric() {
   if (!selectedLyricId.value) return
   await unifiedSubtitlesStore.setAsDefault(selectedLyricId.value)
-  alert('已设为默认台词')
+  toastRef.value?.success('已设为默认台词')
 }
 
 // 台词内联编辑
@@ -513,16 +583,6 @@ function removeLine(index) {
   playerStore.removeLyricLine(index)
   editingIndex.value = -1
 }
-
-// 键盘快捷键
-onMounted(() => {
-  document.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' && editingIndex.value === -1) {
-      e.preventDefault()
-      playerStore.togglePlay()
-    }
-  })
-})
 </script>
 
 <style scoped>
@@ -648,6 +708,7 @@ onMounted(() => {
   cursor: pointer;
   position: relative;
   transition: height 0.2s;
+  touch-action: none;
 }
 
 .progress-bar:hover {
@@ -734,6 +795,7 @@ onMounted(() => {
 .volume-slider {
   flex: 1;
   -webkit-appearance: none;
+  appearance: none;
   height: 4px;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
@@ -747,6 +809,16 @@ onMounted(() => {
   background: var(--accent-gradient);
   border-radius: 50%;
   cursor: pointer;
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--accent-gradient);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
   box-shadow: 0 2px 8px var(--accent-glow);
 }
 
@@ -800,29 +872,6 @@ onMounted(() => {
   padding: 4px 8px;
   font-size: 11px;
   white-space: nowrap;
-}
-
-.lyric-switcher {
-  display: flex;
-  gap: 4px;
-  margin-left: auto;
-}
-
-.lyric-tab {
-  padding: 4px 8px;
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  color: var(--text-muted);
-  font-size: 11px;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.lyric-tab.active {
-  background: var(--accent-gradient);
-  border-color: transparent;
-  color: white;
 }
 
 .import-btn-sm {
@@ -962,21 +1011,10 @@ onMounted(() => {
   justify-content: center;
 }
 
-.edit-btn.save {
-  color: var(--color-success);
-}
-
-.edit-btn.add {
-  color: var(--color-info);
-}
-
-.edit-btn.delete {
-  color: var(--color-error);
-}
-
-.edit-btn.cancel {
-  color: var(--text-muted);
-}
+.edit-btn.save { color: var(--color-success); }
+.edit-btn.add { color: var(--color-info); }
+.edit-btn.delete { color: var(--color-error); }
+.edit-btn.cancel { color: var(--text-muted); }
 
 .edit-btn:hover {
   background: rgba(255, 255, 255, 0.1);
@@ -1242,14 +1280,34 @@ onMounted(() => {
   z-index: 102;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: 8px;
+  padding: 10px 12px;
   padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   background: rgba(17, 17, 17, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid rgba(255,255,255,0.08);
   animation: lyricsFadeIn 0.3s ease;
+}
+
+.mini-nav-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.mini-nav-btn:hover {
+  color: var(--accent-primary);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .mini-track-info {
@@ -1271,6 +1329,8 @@ onMounted(() => {
   height: 3px;
   background: rgba(255,255,255,0.1);
   border-radius: 2px;
+  cursor: pointer;
+  touch-action: none;
 }
 
 .mini-progress-fill {

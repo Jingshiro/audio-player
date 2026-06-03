@@ -102,21 +102,31 @@
         </div>
       </div>
     </div>
+
+    <!-- 确认弹窗 -->
+    <ConfirmDialog ref="confirmRef" />
+
+    <!-- Toast -->
+    <Toast ref="toastRef" />
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, onMounted, watch } from 'vue'
 import { useSettingsStore } from '../stores/settings'
 import { useUnifiedLibraryStore } from '../stores/unifiedLibrary'
 import { useUnifiedSubtitlesStore } from '../stores/unifiedSubtitles'
 import { useLibraryStore } from '../stores/library'
 import { useSubtitlesStore } from '../stores/subtitles'
-import { storageApi, audioApi } from '../api'
+import { storageApi } from '../api'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import Toast from '../components/Toast.vue'
 
 const settingsStore = useSettingsStore()
 const unifiedLibraryStore = useUnifiedLibraryStore()
 const unifiedSubtitlesStore = useUnifiedSubtitlesStore()
+const confirmRef = ref(null)
+const toastRef = ref(null)
 
 const storageStats = ref(null)
 
@@ -128,8 +138,6 @@ const settings = reactive({
 })
 
 // 监听设置变化
-import { watch } from 'vue'
-
 watch(() => settings.autoPlayNext, (val) => localStorage.setItem('auto_play_next', val))
 watch(() => settings.autoScroll, (val) => localStorage.setItem('auto_scroll', val))
 watch(() => settings.crossPagePlay, (val) => localStorage.setItem('cross_page_play', val))
@@ -141,7 +149,6 @@ onMounted(async () => {
 })
 
 async function loadStorageStats() {
-  // 先加载数据
   await unifiedLibraryStore.loadAll()
   await unifiedSubtitlesStore.loadAll()
 
@@ -159,7 +166,12 @@ function onStorageChange() {
 }
 
 async function clearLocalLyrics() {
-  if (confirm('确定要清除所有本地台词吗？')) {
+  const confirmed = await confirmRef.value?.show({
+    title: '清除确认',
+    message: '确定要清除所有本地台词吗？',
+    danger: true
+  })
+  if (confirmed) {
     const localStore = useSubtitlesStore()
     const localSubs = unifiedSubtitlesStore.localSubtitles
     for (const sub of localSubs) {
@@ -167,12 +179,17 @@ async function clearLocalLyrics() {
     }
     await unifiedSubtitlesStore.loadAll()
     await loadStorageStats()
-    alert('本地台词已清除')
+    toastRef.value?.success('本地台词已清除')
   }
 }
 
 async function clearLocalAudio() {
-  if (confirm('确定要清除所有本地音频吗？')) {
+  const confirmed = await confirmRef.value?.show({
+    title: '清除确认',
+    message: '确定要清除所有本地音频吗？',
+    danger: true
+  })
+  if (confirmed) {
     const libraryStore = useLibraryStore()
     const localAudios = unifiedLibraryStore.localAudios
     for (const audio of localAudios) {
@@ -180,32 +197,42 @@ async function clearLocalAudio() {
     }
     await unifiedLibraryStore.loadAll()
     await loadStorageStats()
-    alert('本地音频已清除')
+    toastRef.value?.success('本地音频已清除')
   }
 }
 
 async function clearServerLyrics() {
-  if (confirm('确定要清除所有服务器台词吗？此操作不可恢复！')) {
+  const confirmed = await confirmRef.value?.show({
+    title: '清除确认',
+    message: '确定要清除所有服务器台词吗？此操作不可恢复！',
+    danger: true
+  })
+  if (confirmed) {
     try {
       await storageApi.clearLyrics()
       await unifiedSubtitlesStore.loadAll()
       await loadStorageStats()
-      alert('服务器台词已清除')
+      toastRef.value?.success('服务器台词已清除')
     } catch (err) {
-      alert('清除失败: ' + err.message)
+      toastRef.value?.error('清除失败: ' + err.message)
     }
   }
 }
 
 async function clearServerAudio() {
-  if (confirm('确定要清除所有服务器音频吗？此操作不可恢复！')) {
+  const confirmed = await confirmRef.value?.show({
+    title: '清除确认',
+    message: '确定要清除所有服务器音频吗？此操作不可恢复！',
+    danger: true
+  })
+  if (confirmed) {
     try {
       await storageApi.clearAudio()
       await unifiedLibraryStore.loadAll()
       await loadStorageStats()
-      alert('服务器音频已清除')
+      toastRef.value?.success('服务器音频已清除')
     } catch (err) {
-      alert('清除失败: ' + err.message)
+      toastRef.value?.error('清除失败: ' + err.message)
     }
   }
 }
