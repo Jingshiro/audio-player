@@ -330,10 +330,10 @@ function scrollToLyric(index) {
 
 // 跳转到台词时间
 function seekToLyric(time) {
+  const wasPlaying = playerStore.isPlaying
+  if (wasPlaying) playerStore.pause()
   playerStore.seek(time)
-  if (!playerStore.isPlaying) {
-    playerStore.play()
-  }
+  if (wasPlaying) playerStore.play()
 }
 
 // 进度条拖拽
@@ -373,10 +373,12 @@ function onProgressMove(e) {
 function onProgressUp(e) {
   if (!isDragging.value) return
   isDragging.value = false
-  playerStore.seek(dragTime.value)
-  if (!playerStore.isPlaying) {
-    playerStore.play()
-  }
+  const targetTime = dragTime.value
+  const wasPlaying = playerStore.isPlaying
+  // 先暂停，seek 完再恢复，避免浏览器在播放中 seek 时重置 currentTime
+  if (wasPlaying) playerStore.pause()
+  playerStore.seek(targetTime)
+  if (wasPlaying) playerStore.play()
 }
 
 // 音量变化
