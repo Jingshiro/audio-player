@@ -6,7 +6,7 @@
 
 一个用来学习英语的工具（大嘘）
 
-**在线试用** 👉 [jingshiro.github.io/drama-player](https://jingshiro.github.io/drama-player/)
+**在线试用** 👉 [jingshiro.github.io/audio-player](https://jingshiro.github.io/audio-player/)
 
 ## 懒人功能清单
 
