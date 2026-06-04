@@ -23,7 +23,7 @@ router.post('/', (req, res) => {
     const { name, parent_id } = req.body
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return res.status(400).json({ error: 'name is required' })
+      return res.status(400).json({ error: '名称不能为空' })
     }
     if (name.length > 255) {
       return res.status(400).json({ error: 'name 不能超过 255 个字符' })
@@ -31,7 +31,7 @@ router.post('/', (req, res) => {
 
     if (parent_id) {
       const parent = db.prepare('SELECT id FROM folders WHERE id = ?').get(parent_id)
-      if (!parent) return res.status(404).json({ error: 'Parent folder not found' })
+      if (!parent) return res.status(404).json({ error: '父文件夹不存在' })
     }
 
     const id = uuidv4()
@@ -52,10 +52,10 @@ router.put('/:id', (req, res) => {
   try {
     const db = getDb()
     const existing = db.prepare('SELECT * FROM folders WHERE id = ?').get(req.params.id)
-    if (!existing) return res.status(404).json({ error: 'Folder not found' })
+    if (!existing) return res.status(404).json({ error: '文件夹不存在' })
 
     const { name } = req.body
-    if (!name) return res.status(400).json({ error: 'name is required' })
+    if (!name) return res.status(400).json({ error: '名称不能为空' })
 
     db.prepare('UPDATE folders SET name = ? WHERE id = ?').run(name, req.params.id)
 
@@ -72,7 +72,7 @@ router.delete('/:id', (req, res) => {
   try {
     const db = getDb()
     const existing = db.prepare('SELECT * FROM folders WHERE id = ?').get(req.params.id)
-    if (!existing) return res.status(404).json({ error: 'Folder not found' })
+    if (!existing) return res.status(404).json({ error: '文件夹不存在' })
 
     db.prepare('UPDATE audios SET folder_id = NULL WHERE folder_id = ?').run(req.params.id)
     db.prepare('UPDATE folders SET parent_id = NULL WHERE parent_id = ?').run(req.params.id)

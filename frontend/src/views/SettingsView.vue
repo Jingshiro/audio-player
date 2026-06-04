@@ -206,6 +206,14 @@ BACKEND_PORT=3000</pre>
           <li>或切换到本地部署方案</li>
         </ul>
 
+        <p><strong>⏰ 如果遇到 504 超时错误</strong></p>
+        <p>STT 处理大音频文件可能需要较长时间。如果返回 504 Gateway Timeout：</p>
+        <ul>
+          <li>检查服务器是否使用了 Nginx 等反向代理，需将 <code>proxy_read_timeout</code> 和 <code>proxy_send_timeout</code> 调大（建议 300s）</li>
+          <li>示例配置：<code>proxy_read_timeout 300s; proxy_send_timeout 300s;</code></li>
+          <li>也可以尝试使用更短的音频片段，或选择处理速度更快的模型（如 Groq whisper-large-v3）</li>
+        </ul>
+
         <p><strong>🏠 本地部署</strong></p>
         <p>如果你不想依赖云端服务，可以在本地部署 Whisper：</p>
         <ol>

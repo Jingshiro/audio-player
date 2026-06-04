@@ -87,6 +87,15 @@ export const useUnifiedLibraryStore = defineStore('unifiedLibrary', () => {
     }
   }
 
+  // 添加本地音频（同步更新统一列表）
+  async function addLocalAudio(file) {
+    const libraryStore = useLibraryStore()
+    const audioData = await libraryStore.addAudioFile(file)
+    const unified = { ...audioData, source: 'local' }
+    audioFiles.value.push(unified)
+    return unified
+  }
+
   // 获取音频（根据来源）
   async function getAudioWithUrl(id) {
     const audio = audioFiles.value.find(f => f.id === id)
@@ -157,6 +166,40 @@ export const useUnifiedLibraryStore = defineStore('unifiedLibrary', () => {
     filterSource.value = source
   }
 
+  // 将本地音频上传到服务器
+  async function uploadLocalToServer(audioId) {
+    const audio = audioFiles.value.find(f => f.id === audioId)
+    if (!audio || audio.source !== 'local') throw new Error('只能上传本地音频')
+
+    const libraryStore = useLibraryStore()
+    const data = await libraryStore.getAudioFileWithUrl(audioId)
+    if (!data?.fileBlob) throw new Error('无法读取本地音频文件')
+
+    // 将 Blob 转为 File 对象供 FormData 使用
+    const fileName = audio.originalName || `${audio.name}.mp3`
+    const file = new File([data.fileBlob], fileName, { type: data.fileBlob.type || 'audio/mpeg' })
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('name', audio.name)
+    if (audio.duration) formData.append('duration', String(audio.duration))
+
+    const result = await audioApi.upload(formData)
+
+    const newAudio = {
+      id: result.id,
+      name: result.name,
+      originalName: result.original_name,
+      duration: result.duration,
+      source: 'server',
+      folderId: result.folder_id,
+      createdAt: result.created_at,
+      hasFile: true
+    }
+    audioFiles.value.push(newAudio)
+    return newAudio
+  }
+
   return {
     audioFiles,
     isLoading,
@@ -168,10 +211,12 @@ export const useUnifiedLibraryStore = defineStore('unifiedLibrary', () => {
     localAudios,
     serverAudios,
     loadAll,
+    addLocalAudio,
     getAudioWithUrl,
     getAudioBlob,
     removeAudio,
     setSearchQuery,
-    setFilterSource
+    setFilterSource,
+    uploadLocalToServer
   }
 })

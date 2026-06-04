@@ -100,8 +100,15 @@ export const useAIStore = defineStore('ai', () => {
   function migrateLegacy(key) {
     const old = localStorage.getItem('ai_' + key)
     if (old) {
-      localStorage.setItem('stt_' + key, old)
-      localStorage.setItem('translate_' + key, old)
+      // 只有当新 key 都不存在时才迁移，避免覆盖已有配置
+      if (!localStorage.getItem('stt_' + key)) {
+        localStorage.setItem('stt_' + key, old)
+      }
+      if (!localStorage.getItem('translate_' + key)) {
+        localStorage.setItem('translate_' + key, old)
+      }
+      // 迁移后删除旧 key，防止重复迁移
+      localStorage.removeItem('ai_' + key)
     }
   }
 

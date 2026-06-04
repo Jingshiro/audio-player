@@ -15,11 +15,30 @@ function compressAudio(inputBuffer) {
       'pipe:1'              // stdout
     ])
     const chunks = []
+    let finished = false
     ffmpeg.stdout.on('data', (chunk) => chunks.push(chunk))
-    ffmpeg.stdout.on('end', () => resolve(Buffer.concat(chunks)))
-    ffmpeg.on('error', reject)
+    ffmpeg.stdout.on('end', () => {
+      if (!finished) { finished = true; clearTimeout(timer); resolve(Buffer.concat(chunks)) }
+    })
+    ffmpeg.on('error', (err) => { if (!finished) { finished = true; clearTimeout(timer); reject(err) } })
+    ffmpeg.on('exit', (code) => {
+      if (!finished) {
+        finished = true
+        clearTimeout(timer)
+        if (code !== 0) reject(new Error(`ffmpeg exited with code ${code}`))
+        else resolve(Buffer.concat(chunks))
+      }
+    })
     ffmpeg.stdin.write(inputBuffer)
     ffmpeg.stdin.end()
+    // 60秒超时
+    const timer = setTimeout(() => {
+      if (!finished) {
+        finished = true
+        ffmpeg.kill()
+        reject(new Error('ffmpeg 压缩超时'))
+      }
+    }, 60000)
   })
 }
 
@@ -78,7 +97,7 @@ router.post('/stt', async (req, res) => {
 
   if (!baseUrl || !apiKey || !model || !audioBase64) {
     console.log('[AI/STT] ❌ 缺少必要参数')
-    return res.status(400).json({ error: 'baseUrl, apiKey, model, and audioBase64 are required' })
+    return res.status(400).json({ error: 'baseUrl、apiKey、model、audioBase64 不能为空' })
   }
 
   // 音频压缩：mono 16kHz 32kbps，语音识别足够用
@@ -325,7 +344,7 @@ router.post('/translate', async (req, res) => {
   const { baseUrl, apiKey, model, text, targetLanguage, systemPrompt, stream } = req.body
 
   if (!baseUrl || !apiKey || !model || !text) {
-    return res.status(400).json({ error: 'baseUrl, apiKey, model, and text are required' })
+    return res.status(400).json({ error: 'baseUrl、apiKey、model、text 不能为空' })
   }
 
   const format = detectFormat(baseUrl)
@@ -427,7 +446,7 @@ router.post('/models', async (req, res) => {
   const { baseUrl, apiKey } = req.body
 
   if (!baseUrl || !apiKey) {
-    return res.status(400).json({ error: 'baseUrl and apiKey are required' })
+    return res.status(400).json({ error: 'baseUrl 和 apiKey 不能为空' })
   }
 
   const format = detectFormat(baseUrl)

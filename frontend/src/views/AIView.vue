@@ -498,7 +498,15 @@ async function startSTT() {
     if (content) aiStore.appendResult(content)
     else aiStore.appendResult('[空内容]')
     aiStore.stopGeneration()
-  } catch (e) { console.error('STT 失败:', e); aiStore.stopGeneration(); toastRef.value?.error('STT 失败: ' + e.message) }
+  } catch (e) {
+    console.error('STT 失败:', e)
+    aiStore.stopGeneration()
+    let msg = e.message
+    if (msg.includes('504') || msg.includes('timeout') || msg.includes('abort')) {
+      msg = '请求超时，可能是音频文件过大或网络较慢。建议：1) 在服务器代理中增大超时时间 2) 使用更短的音频片段'
+    }
+    toastRef.value?.error('STT 失败: ' + msg)
+  }
 }
 
 async function startTranslate() {
@@ -566,7 +574,14 @@ async function saveResult() {
   toastRef.value?.success('台词已保存')
 }
 
-function retryGeneration() { aiStore.clearResult(); startSTT() }
+function retryGeneration() {
+  aiStore.clearResult()
+  if (lastGeneratedType.value === 'translate') {
+    startTranslate()
+  } else {
+    startSTT()
+  }
+}
 function discardResult() { aiStore.clearResult() }
 </script>
 

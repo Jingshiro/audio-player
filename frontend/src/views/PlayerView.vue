@@ -221,12 +221,14 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { usePlayerStore } from '../stores/player'
 import { useLibraryStore } from '../stores/library'
+import { useUnifiedLibraryStore } from '../stores/unifiedLibrary'
 import { useUnifiedSubtitlesStore } from '../stores/unifiedSubtitles'
 import { parseLRC, formatTime, formatTimeDetailed } from '../utils/lrcParser'
 import Toast from '../components/Toast.vue'
 
 const playerStore = usePlayerStore()
 const libraryStore = useLibraryStore()
+const unifiedLibraryStore = useUnifiedLibraryStore()
 const unifiedSubtitlesStore = useUnifiedSubtitlesStore()
 const toastRef = ref(null)
 
@@ -267,15 +269,23 @@ function toggleLyricsMode() { lyricsMode.value = !lyricsMode.value }
 // 当前音频 ID
 const currentAudioId = computed(() => playerStore.currentTrack?.id || null)
 
+// 当前音频来源（local / server）
+const currentAudioSource = computed(() => {
+  if (!currentAudioId.value) return null
+  const audio = unifiedLibraryStore.audioFiles.find(f => f.id === currentAudioId.value)
+  return audio?.source || null
+})
+
 // 当前音频绑定的台词
 const boundLyrics = computed(() => {
   if (!currentAudioId.value) return []
   return unifiedSubtitlesStore.getSubtitlesByAudio(currentAudioId.value)
 })
 
-// 未绑定的台词
+// 可选台词：排除已绑定到当前音频的台词，其余全部显示
 const unboundLyrics = computed(() => {
-  return unifiedSubtitlesStore.getUnlinkedSubtitles()
+  if (!currentAudioId.value) return unifiedSubtitlesStore.subtitles
+  return unifiedSubtitlesStore.subtitles.filter(s => s.audioId !== currentAudioId.value)
 })
 
 // 当前选中的台词数据
@@ -284,13 +294,28 @@ const currentLyricData = computed(() => {
   return unifiedSubtitlesStore.getSubtitle(selectedLyricId.value)
 })
 
+// 导入 LRC 文件到播放器和台词库
+function importLRCContent(text, name) {
+  const lyrics = parseLRC(text)
+  playerStore.setLyrics(lyrics)
+  playerStore.addLyricSource({
+    id: `lyric_${Date.now()}`,
+    name,
+    language: 'zh',
+    content: text,
+    lyrics
+  })
+  unifiedSubtitlesStore.addSubtitle({ name, content: text, source: 'import' })
+}
+
 onMounted(async () => {
   // 设置音频元素
   const audioEl = document.getElementById('global-audio')
   if (audioEl) {
     playerStore.setAudioElement(audioEl)
   }
-  // 加载台词库
+  // 加载音频库和台词库
+  await unifiedLibraryStore.loadAll()
   await unifiedSubtitlesStore.loadAll()
 })
 
@@ -455,8 +480,8 @@ async function onAudioImport(e) {
   const file = e.target.files[0]
   if (file) {
     try {
-      const audioData = await libraryStore.addAudioFile(file)
-      const loadedAudio = await libraryStore.getAudioFileWithUrl(audioData.id)
+      const audioData = await unifiedLibraryStore.addLocalAudio(file)
+      const loadedAudio = await unifiedLibraryStore.getAudioWithUrl(audioData.id)
       if (loadedAudio) {
         const track = {
           id: audioData.id,
@@ -480,26 +505,7 @@ function onLrcImport(e) {
   if (file) {
     const reader = new FileReader()
     reader.onload = (event) => {
-      const text = event.target.result
-      const lyrics = parseLRC(text)
-
-      playerStore.setLyrics(lyrics)
-
-      // 添加为台词源
-      playerStore.addLyricSource({
-        id: `lyric_${Date.now()}`,
-        name: file.name.replace(/\.[^/.]+$/, ''),
-        language: 'zh',
-        content: text,
-        lyrics
-      })
-
-      // 同时保存到台词库（供 AI 工具使用）
-      unifiedSubtitlesStore.addSubtitle({
-        name: file.name.replace(/\.[^/.]+$/, ''),
-        content: text,
-        source: 'import'
-      })
+      importLRCContent(event.target.result, file.name.replace(/\.[^/.]+$/, ''))
     }
     reader.readAsText(file)
   }
@@ -522,8 +528,8 @@ async function onDrop(e) {
   for (const file of files) {
     try {
       if (file.type.startsWith('audio/')) {
-        const audioData = await libraryStore.addAudioFile(file)
-        const loadedAudio = await libraryStore.getAudioFileWithUrl(audioData.id)
+        const audioData = await unifiedLibraryStore.addLocalAudio(file)
+        const loadedAudio = await unifiedLibraryStore.getAudioWithUrl(audioData.id)
         if (loadedAudio) {
           const track = {
             id: audioData.id,
@@ -539,21 +545,7 @@ async function onDrop(e) {
       } else if (file.name.endsWith('.lrc') || file.name.endsWith('.txt')) {
         const reader = new FileReader()
         reader.onload = (event) => {
-          const text = event.target.result
-          const lyrics = parseLRC(text)
-          playerStore.setLyrics(lyrics)
-          playerStore.addLyricSource({
-            id: `lyric_${Date.now()}`,
-            name: file.name.replace(/\.[^/.]+$/, ''),
-            language: 'zh',
-            content: text,
-            lyrics
-          })
-          unifiedSubtitlesStore.addSubtitle({
-            name: file.name.replace(/\.[^/.]+$/, ''),
-            content: text,
-            source: 'import'
-          })
+          importLRCContent(event.target.result, file.name.replace(/\.[^/.]+$/, ''))
         }
         reader.readAsText(file)
         toastRef.value?.success(`已导入 ${file.name}`)
@@ -587,6 +579,12 @@ function onLyricSelect() {
 // 绑定台词到当前音频
 async function bindLyric() {
   if (!selectedLyricId.value || !currentAudioId.value) return
+  // 本地台词只能绑定到本地音频
+  const sub = unifiedSubtitlesStore.getSubtitle(selectedLyricId.value)
+  if (sub && currentAudioSource.value && sub.source !== currentAudioSource.value) {
+    toastRef.value?.error('本地台词只能绑定到本地音频')
+    return
+  }
   try {
     await unifiedSubtitlesStore.linkToAudio(selectedLyricId.value, currentAudioId.value)
     toastRef.value?.success('已绑定到当前音频')
@@ -629,8 +627,9 @@ function cancelEditing() {
 }
 
 function onTimeBlur(e, index) {
-  const timeStr = e.target.value
-  const match = timeStr.match(/(\d{2}):(\d{2})\.(\d{2,3})/)
+  const timeStr = e.target.value.trim()
+  // 支持 m:ss.xx / mm:ss.xx / m:ss.xxx / mm:ss.xxx 等格式
+  const match = timeStr.match(/(\d{1,2}):(\d{2})\.(\d{2,3})/)
   if (match) {
     const min = parseInt(match[1], 10)
     const sec = parseInt(match[2], 10)

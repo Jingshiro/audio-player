@@ -33,7 +33,7 @@ router.get('/:id', (req, res) => {
   try {
     const db = getDb()
     const row = db.prepare('SELECT * FROM prompt_presets WHERE id = ?').get(req.params.id)
-    if (!row) return res.status(404).json({ error: 'Preset not found' })
+    if (!row) return res.status(404).json({ error: '预设不存在' })
     res.json(row)
   } catch (e) {
     console.error('获取预设失败:', e)
@@ -48,7 +48,7 @@ router.post('/', (req, res) => {
     const { name, stt_prompt, translate_prompt, is_default } = req.body
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return res.status(400).json({ error: 'name is required' })
+      return res.status(400).json({ error: '名称不能为空' })
     }
     if (name.length > 255) {
       return res.status(400).json({ error: 'name 不能超过 255 个字符' })
@@ -80,7 +80,7 @@ router.put('/:id', (req, res) => {
   try {
     const db = getDb()
     const existing = db.prepare('SELECT * FROM prompt_presets WHERE id = ?').get(req.params.id)
-    if (!existing) return res.status(404).json({ error: 'Preset not found' })
+    if (!existing) return res.status(404).json({ error: '预设不存在' })
 
     const { name, stt_prompt, translate_prompt, is_default } = req.body
 
@@ -115,7 +115,7 @@ router.delete('/:id', (req, res) => {
   try {
     const db = getDb()
     const existing = db.prepare('SELECT * FROM prompt_presets WHERE id = ?').get(req.params.id)
-    if (!existing) return res.status(404).json({ error: 'Preset not found' })
+    if (!existing) return res.status(404).json({ error: '预设不存在' })
 
     db.prepare('DELETE FROM prompt_presets WHERE id = ?').run(req.params.id)
     res.json({ success: true })
@@ -130,7 +130,7 @@ router.put('/:id/default', (req, res) => {
   try {
     const db = getDb()
     const existing = db.prepare('SELECT * FROM prompt_presets WHERE id = ?').get(req.params.id)
-    if (!existing) return res.status(404).json({ error: 'Preset not found' })
+    if (!existing) return res.status(404).json({ error: '预设不存在' })
 
     // 单条 SQL 原子操作，避免竞态
     db.prepare('UPDATE prompt_presets SET is_default = CASE WHEN id = ? THEN 1 ELSE 0 END').run(req.params.id)

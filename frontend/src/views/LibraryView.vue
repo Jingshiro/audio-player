@@ -85,6 +85,7 @@
           </div>
           <div class="item-actions">
             <button class="btn-secondary btn-sm" @click.stop="playAudio(audio)">播放</button>
+            <button v-if="audio.source === 'local' && serverAvailable" class="btn-secondary btn-sm" @click.stop="uploadAudioToServer(audio)">上传</button>
             <button class="btn-danger btn-sm" @click.stop="deleteAudio(audio)">删除</button>
           </div>
         </div>
@@ -131,7 +132,6 @@
               <span class="tag" :class="sub.source === 'server' ? 'server-tag' : 'local-tag'">
                 {{ sub.source === 'server' ? '服务器' : '本地' }}
               </span>
-              <span class="tag source-tag" :class="sub.source">{{ getSourceLabel(sub.source) }}</span>
               <span class="tag" v-if="sub.audioId">
                 关联: {{ getAudioName(sub.audioId) }}
               </span>
@@ -142,6 +142,7 @@
           <div class="item-actions">
             <button class="btn-secondary btn-sm" @click="startRename(sub)">重命名</button>
             <button class="btn-secondary btn-sm" @click="editSubtitle(sub)">编辑</button>
+            <button v-if="sub.source === 'local' && serverAvailable" class="btn-secondary btn-sm" @click="uploadSubtitleToServer(sub)">上传</button>
             <button class="btn-danger btn-sm" @click="deleteSubtitle(sub)">删除</button>
           </div>
         </div>
@@ -254,6 +255,27 @@ const serverCount = computed(() => unifiedLibraryStore.serverCount)
 const localSubtitlesCount = computed(() => unifiedSubtitlesStore.localCount)
 const serverSubtitlesCount = computed(() => unifiedSubtitlesStore.serverCount)
 
+// 预计算 audioId -> subtitles 映射，避免模板中重复 filter
+const subtitlesByAudio = computed(() => {
+  const map = {}
+  for (const sub of unifiedSubtitlesStore.subtitles) {
+    if (sub.audioId) {
+      if (!map[sub.audioId]) map[sub.audioId] = []
+      map[sub.audioId].push(sub)
+    }
+  }
+  return map
+})
+
+function getAudioSubtitles(audioId) {
+  return subtitlesByAudio.value[audioId] || []
+}
+
+function getDefaultSubtitle(audioId) {
+  const subs = subtitlesByAudio.value[audioId]
+  return subs?.find(s => s.isDefault) || null
+}
+
 onMounted(async () => {
   await unifiedLibraryStore.loadAll()
   await unifiedSubtitlesStore.loadAll()
@@ -283,7 +305,7 @@ async function onFileImport(e) {
   for (const file of files) {
     if (file.type.startsWith('audio/')) {
       try {
-        await libraryStore.addAudioFile(file)
+        await unifiedLibraryStore.addLocalAudio(file)
         toastRef.value?.success(`已导入 ${file.name}`)
       } catch (err) {
         toastRef.value?.error(`导入失败: ${err.message}`)
@@ -312,15 +334,36 @@ async function onServerUpload(e) {
   e.target.value = ''
 }
 
-// 获取音频关联的台词
-function getAudioSubtitles(audioId) {
-  return unifiedSubtitlesStore.getSubtitlesByAudio(audioId)
+// 上传本地音频到服务器
+async function uploadAudioToServer(audio) {
+  try {
+    toastRef.value?.info('正在上传音频...')
+    const serverAudio = await unifiedLibraryStore.uploadLocalToServer(audio.id)
+
+    // 上传关联的本地台词
+    const linkedSubs = unifiedSubtitlesStore.subtitles.filter(
+      s => s.source === 'local' && s.audioId === audio.id
+    )
+    for (const sub of linkedSubs) {
+      await unifiedSubtitlesStore.uploadLocalToServer(sub.id, serverAudio.id)
+    }
+
+    await refreshData()
+    toastRef.value?.success(`上传成功${linkedSubs.length > 0 ? `，含 ${linkedSubs.length} 条台词` : ''}`)
+  } catch (err) {
+    toastRef.value?.error('上传失败: ' + err.message)
+  }
 }
 
-// 获取音频的默认台词
-function getDefaultSubtitle(audioId) {
-  const subs = unifiedSubtitlesStore.getSubtitlesByAudio(audioId)
-  return subs.find(s => s.isDefault) || null
+// 上传本地台词到服务器
+async function uploadSubtitleToServer(sub) {
+  try {
+    await unifiedSubtitlesStore.uploadLocalToServer(sub.id)
+    await refreshData()
+    toastRef.value?.success('上传成功')
+  } catch (err) {
+    toastRef.value?.error('上传失败: ' + err.message)
+  }
 }
 
 // 获取音频名称

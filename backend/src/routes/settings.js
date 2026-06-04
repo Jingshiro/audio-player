@@ -30,7 +30,7 @@ router.put('/', (req, res) => {
   try {
     const { key, value } = req.body
     if (!key) {
-      return res.status(400).json({ error: 'key is required' })
+      return res.status(400).json({ error: 'key 不能为空' })
     }
 
     if (key === 'auth_password' || key === 'session_token') {
@@ -56,7 +56,7 @@ router.put('/batch', (req, res) => {
   try {
     const { settings } = req.body
     if (!settings || typeof settings !== 'object') {
-      return res.status(400).json({ error: 'settings object is required' })
+      return res.status(400).json({ error: 'settings 对象不能为空' })
     }
 
     const db = getDb()

@@ -63,7 +63,7 @@ router.get('/:id', (req, res) => {
   try {
     const db = getDb()
     const row = db.prepare('SELECT * FROM audios WHERE id = ?').get(req.params.id)
-    if (!row) return res.status(404).json({ error: 'Audio not found' })
+    if (!row) return res.status(404).json({ error: '音频不存在' })
     res.json(row)
   } catch (e) {
     console.error('获取音频失败:', e)
@@ -76,10 +76,10 @@ router.get('/:id/stream', (req, res) => {
   try {
     const db = getDb()
     const row = db.prepare('SELECT * FROM audios WHERE id = ?').get(req.params.id)
-    if (!row) return res.status(404).json({ error: 'Audio not found' })
+    if (!row) return res.status(404).json({ error: '音频不存在' })
 
     const filePath = path.join(uploadDir, row.filename)
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' })
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: '文件不存在' })
 
     const stat = fs.statSync(filePath)
     const fileSize = stat.size
@@ -103,6 +103,13 @@ router.get('/:id/stream', (req, res) => {
       const parts = range.replace(/bytes=/, '').split('-')
       const start = parseInt(parts[0], 10)
       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+
+      // 校验 Range 合法性
+      if (isNaN(start) || start < 0 || start >= fileSize || start > end) {
+        res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` })
+        return res.end()
+      }
+
       const chunksize = end - start + 1
       const file = fs.createReadStream(filePath, { start, end })
       const head = {
@@ -131,7 +138,7 @@ router.get('/:id/stream', (req, res) => {
 // POST /api/audio/upload - Upload audio file
 router.post('/upload', upload.single('file'), (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+    if (!req.file) return res.status(400).json({ error: '未上传文件' })
 
     const db = getDb()
     const id = uuidv4()
@@ -165,7 +172,7 @@ router.put('/:id', (req, res) => {
   try {
     const db = getDb()
     const existing = db.prepare('SELECT * FROM audios WHERE id = ?').get(req.params.id)
-    if (!existing) return res.status(404).json({ error: 'Audio not found' })
+    if (!existing) return res.status(404).json({ error: '音频不存在' })
 
     const { name, duration, folder_id } = req.body
     db.prepare(`
@@ -191,7 +198,7 @@ router.delete('/:id', (req, res) => {
   try {
     const db = getDb()
     const existing = db.prepare('SELECT * FROM audios WHERE id = ?').get(req.params.id)
-    if (!existing) return res.status(404).json({ error: 'Audio not found' })
+    if (!existing) return res.status(404).json({ error: '音频不存在' })
 
     const filePath = path.join(uploadDir, existing.filename)
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
@@ -209,7 +216,7 @@ router.put('/:id/folder', (req, res) => {
   try {
     const db = getDb()
     const existing = db.prepare('SELECT * FROM audios WHERE id = ?').get(req.params.id)
-    if (!existing) return res.status(404).json({ error: 'Audio not found' })
+    if (!existing) return res.status(404).json({ error: '音频不存在' })
 
     const { folder_id } = req.body
     db.prepare(`
@@ -229,7 +236,7 @@ router.put('/:id/default', (req, res) => {
   try {
     const db = getDb()
     const existing = db.prepare('SELECT * FROM audios WHERE id = ?').get(req.params.id)
-    if (!existing) return res.status(404).json({ error: 'Audio not found' })
+    if (!existing) return res.status(404).json({ error: '音频不存在' })
 
     // 单条 SQL 原子操作，避免竞态
     db.prepare('UPDATE audios SET is_default = CASE WHEN id = ? THEN 1 ELSE 0 END').run(req.params.id)

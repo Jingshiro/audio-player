@@ -102,10 +102,11 @@ export const useUnifiedSubtitlesStore = defineStore('unifiedSubtitles', () => {
 
     if (sub.source === 'server') {
       try {
-        const result = await lyricsApi.update(id, {
-          title: updates.name,
-          content: updates.content
-        })
+        const payload = {}
+        if (updates.name !== undefined) payload.title = updates.name
+        if (updates.content !== undefined) payload.content = updates.content
+        if (updates.audioId !== undefined) payload.audio_id = updates.audioId
+        const result = await lyricsApi.update(id, payload)
         const index = subtitles.value.findIndex(s => s.id === id)
         if (index !== -1) {
           subtitles.value[index] = {
@@ -203,6 +204,33 @@ export const useUnifiedSubtitlesStore = defineStore('unifiedSubtitles', () => {
     defaultStorage.value = storage
   }
 
+  // 将本地台词上传到服务器
+  async function uploadLocalToServer(subtitleId, serverAudioId = null) {
+    const sub = subtitles.value.find(s => s.id === subtitleId)
+    if (!sub || sub.source !== 'local') throw new Error('只能上传本地台词')
+
+    // 只有服务器音频 ID（UUID 格式）才能传给服务器，本地 ID（audio_xxx）不能传
+    const isServerId = serverAudioId && !serverAudioId.startsWith('audio_')
+    const result = await lyricsApi.create({
+      audioId: isServerId ? serverAudioId : undefined,
+      title: sub.name,
+      content: sub.content,
+      language: 'zh'
+    })
+
+    const newSub = {
+      id: result.id,
+      name: result.title || sub.name,
+      content: sub.content,
+      source: 'server',
+      audioId: result.audio_id,
+      isDefault: false,
+      createdAt: result.created_at
+    }
+    subtitles.value.push(newSub)
+    return newSub
+  }
+
   return {
     subtitles,
     isLoading,
@@ -222,6 +250,7 @@ export const useUnifiedSubtitlesStore = defineStore('unifiedSubtitles', () => {
     linkToAudio,
     unlinkFromAudio,
     setAsDefault,
-    setDefaultStorage
+    setDefaultStorage,
+    uploadLocalToServer
   }
 })

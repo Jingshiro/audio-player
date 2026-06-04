@@ -26,11 +26,12 @@ export async function checkBackend() {
   }
 }
 
-// 通用请求函数
+// 通用请求函数（timeout 默认 3 分钟，可通过 options.timeout 自定义，单位 ms）
 async function request(url, options = {}) {
+  const { timeout: customTimeout, ...fetchOptions } = options
   const headers = {
     'Content-Type': 'application/json',
-    ...options.headers
+    ...fetchOptions.headers
   }
 
   // 自动带 token
@@ -38,23 +39,32 @@ async function request(url, options = {}) {
     headers['Authorization'] = `Bearer ${authToken}`
   }
 
-  const response = await fetch(`${API_BASE}${url}`, {
-    ...options,
-    headers
-  })
+  // 超时控制
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), customTimeout || 180000)
 
-  // 401 时清除 token
-  if (response.status === 401) {
-    setAuthToken(null)
-    throw new Error('未登录或登录已过期')
+  try {
+    const response = await fetch(`${API_BASE}${url}`, {
+      ...fetchOptions,
+      headers,
+      signal: controller.signal
+    })
+
+    // 401 时清除 token
+    if (response.status === 401) {
+      setAuthToken(null)
+      throw new Error('未登录或登录已过期')
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: response.statusText }))
+      throw new Error(error.error || `HTTP ${response.status}`)
+    }
+
+    return response.json()
+  } finally {
+    clearTimeout(timeout)
   }
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }))
-    throw new Error(error.error || `HTTP ${response.status}`)
-  }
-
-  return response.json()
 }
 
 // Auth API
@@ -227,7 +237,8 @@ export const aiApi = {
   stt(data) {
     return request('/ai/stt', {
       method: 'POST',
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
+      timeout: 300000 // STT 耗时较长，给 5 分钟
     })
   },
   translate(data) {

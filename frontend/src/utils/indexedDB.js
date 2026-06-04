@@ -125,12 +125,20 @@ export async function updateAudioFile(id, updates) {
 /**
  * 从 IndexedDB 加载音频文件并创建 Object URL
  */
+let lastObjectUrl = null
+
 export async function loadAudioFileById(id) {
   const data = await getAudioFile(id)
   if (!data || !data.fileBlob) return null
 
+  // 释放上一次的 Object URL，避免内存泄漏
+  if (lastObjectUrl) {
+    URL.revokeObjectURL(lastObjectUrl)
+  }
+
   // 从 Blob 创建 Object URL
   const url = URL.createObjectURL(data.fileBlob)
+  lastObjectUrl = url
   return {
     ...data,
     url
