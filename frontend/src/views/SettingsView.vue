@@ -126,6 +126,138 @@
       </div>
     </div>
 
+    <!-- 使用说明 -->
+    <div class="glass-card">
+      <div class="section-title">使用说明</div>
+      <div class="guide-buttons">
+        <button class="btn-secondary" @click="showDeployGuide = true">全栈部署说明</button>
+        <button class="btn-secondary" @click="showSttGuide = true">STT 模型设置</button>
+        <button class="btn-secondary" @click="showAppGuide = true">APP 迁移说明</button>
+      </div>
+    </div>
+
+    <!-- 全栈部署说明弹窗 -->
+    <BaseModal v-model="showDeployGuide" title="全栈部署说明" width="560px">
+      <div class="guide-body">
+        <h5>最低服务器配置</h5>
+        <ul>
+          <li><strong>CPU</strong>：1 核</li>
+          <li><strong>内存</strong>：512MB（推荐 1GB）</li>
+          <li><strong>硬盘</strong>：10GB 起步（取决于你的音频文件大小）</li>
+          <li><strong>系统</strong>：支持 Docker 的 Linux 发行版（Ubuntu / Debian / CentOS 均可）</li>
+          <li><strong>网络</strong>：需要开放 8080（前端）和 3000（后端）端口</li>
+        </ul>
+
+        <h5>部署步骤</h5>
+        <ol>
+          <li>安装 Docker 和 Docker Compose</li>
+          <li>创建项目目录并进入：<code>mkdir -p data/audio data/lyrics</code></li>
+          <li>创建 <code>docker-compose.yml</code>，内容参考项目中的 <code>docker-compose.full.yml</code></li>
+          <li>在同目录创建 <code>.env</code> 文件，设置端口：
+            <pre>FRONTEND_PORT=8080
+BACKEND_PORT=3000</pre>
+          </li>
+          <li>启动：<code>docker compose up -d</code></li>
+          <li>首次访问会弹登录框，默认密码 <code>admin</code>，登录后记得改密码</li>
+        </ol>
+
+        <h5>常见问题</h5>
+        <ul class="faq-list">
+          <li>
+            <strong>上传大音频文件报错（413 / 502）</strong>
+            <p>Nginx 默认限制请求体大小。本项目已在 Nginx 配置中设置 <code>client_max_body_size 0</code>（无限制），如果你使用自定义 Nginx 反向代理，需要在代理配置中也加上这一项，否则上传大文件会被拒绝。</p>
+          </li>
+          <li>
+            <strong>上传大文件时请求超时</strong>
+            <p>大音频文件（>100MB）上传需要较长时间。如果前端报超时错误，检查是否有外层 Nginx / 防火墙设置了 <code>proxy_read_timeout</code> 或 <code>proxy_connect_timeout</code>，建议设为 300 秒以上。</p>
+          </li>
+          <li>
+            <strong>容器重启后数据丢失</strong>
+            <p>确认 <code>data</code> 目录已正确挂载到宿主机。运行 <code>docker compose down && docker compose up -d</code> 后检查 <code>data/</code> 目录下是否有 <code>music.db</code> 文件。</p>
+          </li>
+          <li>
+            <strong>端口被占用</strong>
+            <p>修改 <code>.env</code> 中的端口映射即可，例如将 <code>FRONTEND_PORT</code> 改为 <code>8081</code>。</p>
+          </li>
+          <li>
+            <strong>SQLite 数据库损坏</strong>
+            <p>极端情况下（如断电）数据库可能损坏。备份 <code>data/music.db</code> 文件后，可删除该文件并重启容器重建数据库（音频文件不受影响）。</p>
+          </li>
+        </ul>
+      </div>
+    </BaseModal>
+
+    <!-- STT 模型设置弹窗 -->
+    <BaseModal v-model="showSttGuide" title="STT 模型设置" width="520px">
+      <div class="guide-body">
+        <p><strong>⚠️ 重要：必须选择支持语音理解的模型</strong></p>
+        <p>STT（语音转文字）并非所有模型都支持，需要选择专门处理音频的模型：</p>
+        <ul>
+          <li><strong>Groq</strong>：推荐 whisper-large-v3（速度快、效果好）</li>
+          <li><strong>OpenAI</strong>：支持 Whisper 系列模型</li>
+          <li><strong>Gemini</strong>：支持原生音频理解（推荐 gemini-2.0-flash 等多模态模型）</li>
+          <li><strong>本地 Whisper</strong>：完全免费、无审查，需要自己部署</li>
+        </ul>
+
+        <p><strong>🚫 如果遇到空返回或拒绝响应</strong></p>
+        <p>STT 服务通常比文字输入有更严格的内容审查。如果生成结果为空或被拒绝：</p>
+        <ul>
+          <li>尝试在「破限词配置」中加入适当的引导词</li>
+          <li>或切换到本地部署方案</li>
+        </ul>
+
+        <p><strong>🏠 本地部署</strong></p>
+        <p>如果你不想依赖云端服务，可以在本地部署 Whisper：</p>
+        <ol>
+          <li><strong>faster-whisper</strong>（推荐）：<code>pip install faster-whisper</code></li>
+          <li><strong>whisper.cpp</strong>：轻量级 C++ 实现</li>
+          <li>启动后会提供 OpenAI 兼容的 API 地址（通常是 <code>http://localhost:8080/v1</code>）</li>
+          <li>在 STT 设置中选择「本地 Whisper」后，API 密钥留空即可</li>
+        </ol>
+      </div>
+    </BaseModal>
+
+    <!-- APP 迁移说明弹窗 -->
+    <BaseModal v-model="showAppGuide" title="APP 迁移说明" width="520px">
+      <div class="guide-body">
+        <p>本项目可以打包为 Android 原生 APP，后端仍然部署在你的服务器上，前端通过 WebView 运行。</p>
+
+        <h5>方案：Capacitor</h5>
+        <p>Capacitor 是 Ionic 团队推出的跨平台方案，可以将现有的 Vue 3 网页应用直接打包为 Android APP，无需重写代码。</p>
+
+        <h5>迁移步骤</h5>
+        <ol>
+          <li>在前端项目中安装 Capacitor：
+            <pre>npm install @capacitor/core @capacitor/cli
+npx cap init
+npm install @capacitor/android
+npx cap add android</pre>
+          </li>
+          <li>修改 API 地址配置：将 API base URL 从 <code>/api</code> 改为可配置的服务器地址（如 <code>http://你的服务器IP:3000/api</code>）</li>
+          <li>构建并同步：
+            <pre>npm run build
+npx cap sync
+npx cap open android</pre>
+          </li>
+          <li>在 Android Studio 中 Build → Generate Signed APK</li>
+        </ol>
+
+        <h5>需要适配的地方</h5>
+        <ul>
+          <li><strong>文件导入</strong>：手机端无法拖拽文件，需改用 Capacitor File Picker 插件选择本地文件</li>
+          <li><strong>毛玻璃效果</strong>：现代 Android WebView 支持 <code>backdrop-filter</code>，低版本可能需要降级</li>
+          <li><strong>键盘快捷键</strong>：Space 播放/暂停不适用于手机端，已有触屏操作替代</li>
+        </ul>
+
+        <h5>不需要改动的部分</h5>
+        <ul>
+          <li>后端代码完全不动</li>
+          <li>Vue 组件、路由、状态管理逻辑 95%+ 直接复用</li>
+          <li>音频播放、歌词渲染等核心功能正常运行</li>
+        </ul>
+      </div>
+    </BaseModal>
+
     <!-- 确认弹窗 -->
     <ConfirmDialog ref="confirmRef" />
 
@@ -142,6 +274,7 @@ import { useUnifiedSubtitlesStore } from '../stores/unifiedSubtitles'
 import { useLibraryStore } from '../stores/library'
 import { useSubtitlesStore } from '../stores/subtitles'
 import { storageApi, authApi } from '../api'
+import BaseModal from '../components/BaseModal.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import Toast from '../components/Toast.vue'
 
@@ -152,6 +285,11 @@ const confirmRef = ref(null)
 const toastRef = ref(null)
 
 const storageStats = ref(null)
+
+// 使用说明弹窗
+const showDeployGuide = ref(false)
+const showSttGuide = ref(false)
+const showAppGuide = ref(false)
 
 // 密码修改
 const passwordForm = reactive({
@@ -514,6 +652,88 @@ async function clearServerAudio() {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* 使用说明 */
+.guide-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.guide-body {
+  padding: 16px 0 8px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.guide-body h5 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 16px 0 8px 0;
+}
+
+.guide-body h5:first-child {
+  margin-top: 0;
+}
+
+.guide-body ul,
+.guide-body ol {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.guide-body li {
+  margin-bottom: 6px;
+}
+
+.guide-body li p {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.guide-body code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+}
+
+.guide-body pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  font-size: 12px;
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.guide-body strong {
+  color: var(--text-primary);
+}
+
+.faq-list {
+  list-style: none;
+  padding-left: 0 !important;
+}
+
+.faq-list li {
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  border-left: 3px solid var(--accent-primary);
+}
+
+.faq-list li p {
+  margin: 6px 0 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 /* 响应式 */

@@ -23,11 +23,6 @@
       <div class="form-group">
         <label>
           服务提供商
-          <button class="help-btn" @click="showSttHelp = true" title="STT 使用说明">
-            <svg viewBox="0 0 24 24" width="14" height="14">
-              <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
-            </svg>
-          </button>
         </label>
         <div class="preset-selector">
           <button v-for="preset in sttModelPresets" :key="preset.id"
@@ -288,37 +283,6 @@
     <!-- 确认弹窗 -->
     <ConfirmDialog ref="confirmRef" />
 
-    <!-- STT 帮助弹窗 -->
-    <BaseModal v-model="showSttHelp" title="STT 使用说明" width="500px">
-      <div class="help-content">
-        <p><strong>⚠️ 重要提示：必须选择支持语音理解的模型</strong></p>
-        <p>STT（语音转文字）不是所有模型都支持，需要选择专门处理音频的模型：</p>
-        <ul>
-          <li><strong>Groq</strong>：推荐 whisper-large-v3（速度快、效果好）</li>
-          <li><strong>OpenAI</strong>：支持 Whisper 系列模型</li>
-          <li><strong>Gemini</strong>：支持原生音频理解（推荐 gemini-2.0-flash 等多模态模型）</li>
-          <li><strong>本地 Whisper</strong>：完全免费、无审查，需要自己部署</li>
-        </ul>
-        <p><strong>🚫 如果遇到空返回或拒绝响应</strong></p>
-        <p>STT 服务通常比文字输入有更严格的内容审查。如果生成结果为空或被拒绝：</p>
-        <ul>
-          <li>尝试在「破限词配置」中加入适当的引导词</li>
-          <li>或切换到本地部署方案</li>
-        </ul>
-        <p><strong>🏠 本地部署</strong></p>
-        <p>如果你不想依赖云端服务，可以在本地部署 Whisper：</p>
-        <ol>
-          <li><strong>faster-whisper</strong>（推荐）：<code>pip install faster-whisper</code></li>
-          <li><strong>whisper.cpp</strong>：轻量级 C++ 实现</li>
-          <li>启动后会提供 OpenAI 兼容的 API 地址（通常是 <code>http://localhost:8080/v1</code>）</li>
-          <li>在选择「本地 Whisper」后，API 密钥留空即可</li>
-        </ol>
-      </div>
-      <template #footer>
-        <button class="btn-primary" @click="showSttHelp = false">我知道了</button>
-      </template>
-    </BaseModal>
-
     <!-- Toast -->
     <Toast ref="toastRef" />
   </div>
@@ -344,7 +308,6 @@ const confirmRef = ref(null)
 const toastRef = ref(null)
 
 const hasBackend = ref(false)
-const showSttHelp = ref(false)
 const allModelPresets = Object.values(MODEL_PRESETS)
 
 // STT 预设（过滤 MiMo，Groq 优先）
@@ -883,64 +846,5 @@ function discardResult() { aiStore.clearResult() }
   .tools-grid {
     grid-template-columns: 1fr;
   }
-}
-
-/* 帮助按钮 */
-.help-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  margin-left: 6px;
-  padding: 0;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  border-radius: 50%;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  vertical-align: middle;
-}
-
-.help-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: var(--text-primary);
-}
-
-/* 帮助内容 */
-.help-content {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text-secondary);
-}
-
-.help-content p {
-  margin: 12px 0;
-}
-
-.help-content p:first-child {
-  margin-top: 0;
-}
-
-.help-content strong {
-  color: var(--text-primary);
-}
-
-.help-content ul, .help-content ol {
-  margin: 8px 0;
-  padding-left: 20px;
-}
-
-.help-content li {
-  margin: 6px 0;
-}
-
-.help-content code {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 12px;
 }
 </style>
