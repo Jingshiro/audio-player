@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { promptApi, getAuthToken } from '../api'
 
 export const usePromptStore = defineStore('prompt', () => {
   // 破限词预设列表
@@ -40,6 +41,12 @@ export const usePromptStore = defineStore('prompt', () => {
     }
     presets.value.push(preset)
     save()
+    // 同步到服务器
+    if (getAuthToken()) {
+      promptApi.create({
+        name, stt_prompt: sttPrompt, translate_prompt: translatePrompt
+      }).catch(() => {})
+    }
     return preset
   }
 
@@ -49,6 +56,14 @@ export const usePromptStore = defineStore('prompt', () => {
     if (preset) {
       Object.assign(preset, updates, { updatedAt: new Date().toISOString() })
       save()
+      // 同步到服务器
+      if (getAuthToken()) {
+        promptApi.update(id, {
+          name: preset.name,
+          stt_prompt: preset.sttPrompt,
+          translate_prompt: preset.translatePrompt
+        }).catch(() => {})
+      }
     }
   }
 
@@ -61,6 +76,10 @@ export const usePromptStore = defineStore('prompt', () => {
         defaultPresetId.value = presets.value.length > 0 ? presets.value[0].id : null
       }
       save()
+      // 同步到服务器
+      if (getAuthToken()) {
+        promptApi.delete(id).catch(() => {})
+      }
     }
   }
 
@@ -68,6 +87,10 @@ export const usePromptStore = defineStore('prompt', () => {
   function setDefault(id) {
     defaultPresetId.value = id
     save()
+    // 同步到服务器
+    if (getAuthToken()) {
+      promptApi.setDefault(id).catch(() => {})
+    }
   }
 
   // 获取预设
@@ -87,6 +110,64 @@ export const usePromptStore = defineStore('prompt', () => {
     return { sttPrompt: '', translatePrompt: '' }
   }
 
+  // ===== 服务器同步 =====
+  async function loadFromServer() {
+    if (!getAuthToken()) return
+    try {
+      const serverPresets = await promptApi.list()
+      if (Array.isArray(serverPresets) && serverPresets.length > 0) {
+        // 合并：以服务器数据为主，保留本地独有的
+        const serverIds = new Set(serverPresets.map(p => p.id))
+        const localOnly = presets.value.filter(p => !serverIds.has(p.id))
+        presets.value = [
+          ...serverPresets.map(p => ({
+            id: p.id,
+            name: p.name,
+            sttPrompt: p.stt_prompt || '',
+            translatePrompt: p.translate_prompt || '',
+            isDefault: p.is_default === 1,
+            createdAt: p.created_at,
+            updatedAt: p.updated_at
+          })),
+          ...localOnly
+        ]
+        // 同步默认预设
+        const defaultServer = serverPresets.find(p => p.is_default === 1)
+        if (defaultServer) {
+          defaultPresetId.value = defaultServer.id
+        }
+        save()
+      }
+    } catch (e) {
+      console.warn('从服务器加载破限词预设失败:', e)
+    }
+  }
+
+  async function syncToServer() {
+    if (!getAuthToken()) return
+    try {
+      // 逐个同步本地预设到服务器
+      for (const preset of presets.value) {
+        await promptApi.create({
+          name: preset.name,
+          stt_prompt: preset.sttPrompt,
+          translate_prompt: preset.translatePrompt,
+          is_default: preset.id === defaultPresetId.value
+        }).catch(() => {
+          // 如果已存在则更新
+          promptApi.update(preset.id, {
+            name: preset.name,
+            stt_prompt: preset.sttPrompt,
+            translate_prompt: preset.translatePrompt,
+            is_default: preset.id === defaultPresetId.value
+          }).catch(() => {})
+        })
+      }
+    } catch (e) {
+      console.warn('同步破限词预设到服务器失败:', e)
+    }
+  }
+
   return {
     presets,
     defaultPresetId,
@@ -96,6 +177,8 @@ export const usePromptStore = defineStore('prompt', () => {
     deletePreset,
     setDefault,
     getPreset,
-    loadDefaultPrompts
+    loadDefaultPrompts,
+    loadFromServer,
+    syncToServer
   }
 })

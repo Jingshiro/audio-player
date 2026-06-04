@@ -53,7 +53,7 @@ function close() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .modal-header h3 {
@@ -77,12 +77,12 @@ function close() {
 .modal-body {
   flex: 1;
   overflow-y: auto;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 16px;
 }
 </style>

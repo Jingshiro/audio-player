@@ -11,7 +11,7 @@ router.use(requireAuth)
 router.get('/', (req, res) => {
   try {
     const db = getDb()
-    const rows = db.prepare("SELECT key, value FROM settings WHERE key != 'auth_password'").all()
+    const rows = db.prepare("SELECT key, value FROM settings WHERE key NOT IN ('auth_password', 'session_token')").all()
 
     const settings = {}
     for (const row of rows) {
@@ -33,8 +33,8 @@ router.put('/', (req, res) => {
       return res.status(400).json({ error: 'key is required' })
     }
 
-    if (key === 'auth_password') {
-      return res.status(400).json({ error: '请使用 /api/auth/password 修改密码' })
+    if (key === 'auth_password' || key === 'session_token') {
+      return res.status(400).json({ error: '该设置不允许通过此接口修改' })
     }
 
     const db = getDb()
@@ -68,7 +68,7 @@ router.put('/batch', (req, res) => {
 
     const transaction = db.transaction(() => {
       for (const [key, value] of Object.entries(settings)) {
-        if (key === 'auth_password') continue
+        if (key === 'auth_password' || key === 'session_token') continue
         stmt.run(key, value, value)
       }
     })

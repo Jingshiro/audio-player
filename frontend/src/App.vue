@@ -108,6 +108,7 @@ import { useRouter } from 'vue-router'
 import { usePlayerStore } from './stores/player'
 import { useLibraryStore } from './stores/library'
 import { useAIStore } from './stores/ai'
+import { usePromptStore } from './stores/prompt'
 import { checkBackend, authApi, setAuthToken } from './api'
 import NavIcon from './components/NavIcon.vue'
 
@@ -115,6 +116,7 @@ const router = useRouter()
 const playerStore = usePlayerStore()
 const libraryStore = useLibraryStore()
 const aiStore = useAIStore()
+const promptStore = usePromptStore()
 const audioRef = ref(null)
 
 // 登录状态
@@ -142,6 +144,7 @@ onMounted(async () => {
       } else {
         // 已登录，加载服务器设置
         await aiStore.loadApiPresetsFromServer()
+        await promptStore.loadFromServer()
       }
     } catch {
       showLogin.value = true
@@ -158,6 +161,7 @@ async function handleLogin() {
     setAuthToken(token)
     showLogin.value = false
     await aiStore.loadApiPresetsFromServer()
+    await promptStore.loadFromServer()
   } catch (e) {
     loginError.value = e.message || '登录失败'
   } finally {
@@ -458,12 +462,12 @@ async function handleLogin() {
 .login-modal {
   width: 360px;
   max-width: 90vw;
-  padding: 32px;
+  padding: 40px;
 }
 
 .login-header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .login-logo {
@@ -487,7 +491,7 @@ async function handleLogin() {
 .login-modal form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .login-error {
@@ -504,6 +508,6 @@ async function handleLogin() {
   text-align: center;
   font-size: 12px;
   color: var(--text-muted);
-  margin-top: 16px;
+  margin-top: 20px;
 }
 </style>

@@ -1,27 +1,42 @@
 // 简单的 token 认证中间件
-// Token 存储在内存中，重启后失效
+// Token 存储在数据库中，服务器重启后仍然有效
 
 const crypto = require('crypto')
-const tokens = new Map()
+const { getDb } = require('../db/init')
 
 // 生成密码学安全的随机 token
 function generateToken() {
   return crypto.randomBytes(32).toString('base64url')
 }
 
-// 添加 token
+// 添加 token（存入数据库）
 function addToken(token) {
-  tokens.set(token, { createdAt: Date.now() })
+  const db = getDb()
+  db.prepare(`
+    INSERT INTO settings (key, value, updated_at)
+    VALUES (?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')
+  `).run('session_token', token, token)
 }
 
-// 验证 token
+// 验证 token（从数据库查询）
 function verifyToken(token) {
-  return tokens.has(token)
+  if (!token) return false
+  try {
+    const db = getDb()
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'session_token'").get()
+    return row && row.value === token
+  } catch {
+    return false
+  }
 }
 
-// 删除 token
+// 删除 token（从数据库移除）
 function removeToken(token) {
-  tokens.delete(token)
+  try {
+    const db = getDb()
+    db.prepare("DELETE FROM settings WHERE key = 'session_token'").run()
+  } catch {}
 }
 
 // 认证中间件

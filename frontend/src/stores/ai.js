@@ -36,21 +36,63 @@ export const useAIStore = defineStore('ai', () => {
     }
   }
 
-  // ===== 从服务器加载 API 预设 =====
+  // ===== 从服务器加载所有设置（登录后调用） =====
   async function loadApiPresetsFromServer() {
     if (!getAuthToken()) return
     try {
       const settings = await settingsApi.get()
+      // 合并 API 预设（去重）
       if (settings.api_presets) {
         const serverPresets = JSON.parse(settings.api_presets)
-        // 合并：服务器的预设 + 本地独有的预设（避免丢失本地新增的）
         const localIds = new Set(apiPresets.value.map(p => p.id))
         const serverOnly = serverPresets.filter(p => !localIds.has(p.id))
         apiPresets.value = [...apiPresets.value, ...serverOnly]
         saveApiPresets()
       }
+      // 加载 STT 配置（服务器优先，确保跨设备一致）
+      if (settings.stt_base_url) {
+        sttConfig.value.baseUrl = settings.stt_base_url
+        localStorage.setItem('stt_base_url', settings.stt_base_url)
+      }
+      if (settings.stt_api_key) {
+        sttConfig.value.apiKey = settings.stt_api_key
+        localStorage.setItem('stt_api_key', settings.stt_api_key)
+      }
+      if (settings.stt_model) {
+        sttConfig.value.model = settings.stt_model
+        localStorage.setItem('stt_model', settings.stt_model)
+      }
+      if (settings.stt_preset) {
+        sttPresetId.value = settings.stt_preset
+        localStorage.setItem('stt_preset', settings.stt_preset)
+      }
+      if (settings.stt_prompt) {
+        sttPrompt.value = settings.stt_prompt
+        localStorage.setItem('stt_prompt', settings.stt_prompt)
+      }
+      // 加载翻译配置（服务器优先）
+      if (settings.translate_base_url) {
+        translateConfig.value.baseUrl = settings.translate_base_url
+        localStorage.setItem('translate_base_url', settings.translate_base_url)
+      }
+      if (settings.translate_api_key) {
+        translateConfig.value.apiKey = settings.translate_api_key
+        localStorage.setItem('translate_api_key', settings.translate_api_key)
+      }
+      if (settings.translate_model) {
+        translateConfig.value.model = settings.translate_model
+        localStorage.setItem('translate_model', settings.translate_model)
+      }
+      if (settings.translate_preset) {
+        translatePresetId.value = settings.translate_preset
+        localStorage.setItem('translate_preset', settings.translate_preset)
+      }
+      if (settings.translate_prompt) {
+        translatePrompt.value = settings.translate_prompt
+        localStorage.setItem('translate_prompt', settings.translate_prompt)
+      }
     } catch (e) {
-      console.warn('从服务器加载 API 预设失败:', e)
+      console.warn('从服务器加载设置失败:', e)
     }
   }
 
