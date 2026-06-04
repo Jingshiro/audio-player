@@ -65,6 +65,27 @@ export const usePlayerStore = defineStore('player', () => {
     return null
   })
 
+  // Media Session API - 后台播放支持
+  function setupMediaSession() {
+    if (!('mediaSession' in navigator)) return
+
+    const track = currentTrack.value
+    if (!track) return
+
+    // 设置元数据（通知栏/锁屏显示）
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.name || '未知音频',
+      artist: '本地音频',
+      album: '音声播放器',
+    })
+
+    // 注册操作处理
+    navigator.mediaSession.setActionHandler('play', () => play())
+    navigator.mediaSession.setActionHandler('pause', () => pause())
+    navigator.mediaSession.setActionHandler('previoustrack', () => playPrev())
+    navigator.mediaSession.setActionHandler('nexttrack', () => playNext())
+  }
+
   // 操作方法
   let currentAudioRef = null
   let savedListeners = {}
@@ -96,8 +117,19 @@ export const usePlayerStore = defineStore('player', () => {
     }
 
     savedListeners = {
-      play: () => { isPlaying.value = true },
-      pause: () => { isPlaying.value = false; persistState() },
+      play: () => {
+        isPlaying.value = true
+        if ('mediaSession' in navigator) {
+          navigator.mediaSession.playbackState = 'playing'
+        }
+      },
+      pause: () => {
+        isPlaying.value = false
+        persistState()
+        if ('mediaSession' in navigator) {
+          navigator.mediaSession.playbackState = 'paused'
+        }
+      },
       timeupdate: () => {
         currentTime.value = audio.currentTime
         updateCurrentLyricIndex()
@@ -207,6 +239,7 @@ export const usePlayerStore = defineStore('player', () => {
   // 音频加载（支持断点续播）
   function loadTrack(track, resume = true) {
     currentTrack.value = track
+    setupMediaSession()
     if (audioElement.value && track?.url) {
       audioElement.value.src = track.url
       audioElement.value.load()
