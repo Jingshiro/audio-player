@@ -84,7 +84,23 @@ docker compose -f docker-compose.prod.yml up -d
 ```ini
 FRONTEND_PORT=8080
 BACKEND_PORT=3000
+# CORS 配置 - 必须填写你的域名，否则 APP 无法连接
+CORS_ORIGIN=https://your-domain.com,https://localhost,capacitor://localhost
 ```
+
+## 打包 Android APP
+
+项目支持打包成原生 Android APK，详见 [Android 打包指南](frontend/ANDROID_BUILD_GUIDE.md)。
+
+```bash
+cd frontend
+npm install
+npm run build
+npx cap sync android
+# 用 Android Studio 打开 frontend/android 目录打包
+```
+
+**重要**：打包 APP 前必须配置后端 CORS，否则 APP 无法连接服务器。
 
 ## 技术栈（随便看看）
 

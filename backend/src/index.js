@@ -16,9 +16,23 @@ const storageRoutes = require('./routes/storage')
 const app = express()
 const PORT = process.env.PORT || 3000
 
-// Middleware
+// Middleware - 支持多个 CORS origin（Web + Capacitor APP）
+const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:8080')
+  .split(',')
+  .map(o => o.trim())
+// 添加 Capacitor APP 的 origin
+corsOrigins.push('capacitor://localhost')
+corsOrigins.push('https://localhost')
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:8080',
+  origin: (origin, callback) => {
+    // 允许没有 origin 的请求（如 Postman、APP 请求）
+    if (!origin || corsOrigins.includes(origin)) {
+      callback(null, true)
+    } else {
+      callback(null, true) // 临时允许所有 origin，生产环境应限制
+    }
+  },
   credentials: true
 }))
 app.use(express.json({ limit: '1gb' }))

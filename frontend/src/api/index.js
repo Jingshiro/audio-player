@@ -1,4 +1,4 @@
-const API_BASE = '/api'
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
 // Token 管理
 let authToken = localStorage.getItem('auth_token') || null

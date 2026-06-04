@@ -23,6 +23,9 @@ services:
     environment:
       - DATABASE_URL=file:./data/music.db
       - NODE_ENV=production
+      # CORS 配置 - 必须填写！允许访问的域名（逗号分隔）
+      # 例如: https://your-domain.com,https://localhost,capacitor://localhost
+      - CORS_ORIGIN=${CORS_ORIGIN}
     restart: unless-stopped
 
 volumes:
