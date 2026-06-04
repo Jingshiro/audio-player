@@ -22,7 +22,7 @@ const props = defineProps({
   modelValue: { type: Boolean, default: false },
   title: { type: String, default: '' },
   width: { type: String, default: '500px' },
-  maxWidth: { type: String, default: '90vw' }
+  maxWidth: { type: String, default: '85vw' }
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -47,6 +47,7 @@ function close() {
   max-height: 80vh;
   display: flex;
   flex-direction: column;
+  padding: 32px;
 }
 
 .modal-header {

@@ -495,8 +495,8 @@ body {
 
 .confirm-dialog {
   width: 380px;
-  max-width: 90vw;
-  padding: 36px;
+  max-width: 85vw;
+  padding: 40px;
 }
 
 .confirm-dialog h3 {

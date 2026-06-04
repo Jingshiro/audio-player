@@ -461,8 +461,8 @@ async function handleLogin() {
 
 .login-modal {
   width: 360px;
-  max-width: 90vw;
-  padding: 40px;
+  max-width: 85vw;
+  padding: 44px;
 }
 
 .login-header {
