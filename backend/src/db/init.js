@@ -7,7 +7,7 @@ let db = null
 function getDb() {
   if (!db) {
     // 处理 DATABASE_URL=file:./data/music.db 格式
-    let dbPath = process.env.DATABASE_URL || './data/music.db'
+    let dbPath = process.env.DATABASE_URL || './db/music.db'
     if (dbPath.startsWith('file:')) {
       dbPath = dbPath.slice(5)
     }

@@ -3,7 +3,9 @@ const fs = require('fs')
 const path = require('path')
 const { getDb } = require('../db/init')
 
+const { requireAuth } = require('../middleware/auth')
 const router = express.Router()
+router.use(requireAuth)
 const uploadDir = path.resolve(process.env.UPLOAD_DIR || './data/audio')
 
 // GET /api/storage/stats - 获取存储统计

@@ -45,6 +45,9 @@ export const usePlayerStore = defineStore('player', () => {
   const playlist = ref([]) // { id, name, file, url }[]
   const currentIndex = ref(-1)
 
+  // 循环模式: 'none' | 'list' | 'single' | 'shuffle'
+  const loopMode = ref('none')
+
   // 进度保存节流
   let lastSaveTime = 0
 
@@ -113,6 +116,7 @@ export const usePlayerStore = defineStore('player', () => {
       volume.value = saved.volume ?? 0.8
       isMuted.value = saved.isMuted ?? false
       previousVolume.value = saved.previousVolume ?? 0.8
+      loopMode.value = saved.loopMode ?? 'none'
       audio.volume = saved.isMuted ? 0 : (saved.volume ?? 0.8)
     }
 
@@ -159,6 +163,7 @@ export const usePlayerStore = defineStore('player', () => {
       volume: volume.value,
       isMuted: isMuted.value,
       previousVolume: previousVolume.value,
+      loopMode: loopMode.value,
       savedAt: Date.now()
     })
   }
@@ -274,24 +279,71 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  // 切换循环模式
+  function toggleLoopMode() {
+    const modes = ['none', 'list', 'single', 'shuffle']
+    const idx = modes.indexOf(loopMode.value)
+    loopMode.value = modes[(idx + 1) % modes.length]
+    persistState()
+  }
+
   function playNext() {
     if (playlist.value.length === 0) return
-    const nextIndex = currentIndex.value + 1
-    if (nextIndex < playlist.value.length) {
-      currentIndex.value = nextIndex
-      loadTrack(playlist.value[nextIndex])
+
+    // 单曲循环：重新播放当前曲目
+    if (loopMode.value === 'single') {
+      loadTrack(playlist.value[currentIndex.value])
       play()
+      return
     }
+
+    let nextIndex = currentIndex.value + 1
+
+    if (loopMode.value === 'shuffle') {
+      // 随机：随机选一首（不重复当前）
+      if (playlist.value.length > 1) {
+        do { nextIndex = Math.floor(Math.random() * playlist.value.length) }
+        while (nextIndex === currentIndex.value)
+      } else {
+        nextIndex = 0
+      }
+    } else if (nextIndex >= playlist.value.length) {
+      if (loopMode.value === 'list') {
+        nextIndex = 0 // 列表循环：回到第一首
+      } else {
+        return // 不循环：停止
+      }
+    }
+
+    currentIndex.value = nextIndex
+    loadTrack(playlist.value[nextIndex])
+    play()
   }
 
   function playPrev() {
     if (playlist.value.length === 0) return
-    const prevIndex = currentIndex.value - 1
-    if (prevIndex >= 0) {
-      currentIndex.value = prevIndex
-      loadTrack(playlist.value[prevIndex])
-      play()
+
+    let prevIndex = currentIndex.value - 1
+
+    if (loopMode.value === 'shuffle') {
+      // 随机模式下上一首也随机
+      if (playlist.value.length > 1) {
+        do { prevIndex = Math.floor(Math.random() * playlist.value.length) }
+        while (prevIndex === currentIndex.value)
+      } else {
+        prevIndex = 0
+      }
+    } else if (prevIndex < 0) {
+      if (loopMode.value === 'list') {
+        prevIndex = playlist.value.length - 1 // 列表循环：跳到最后一首
+      } else {
+        return // 不循环：停止
+      }
     }
+
+    currentIndex.value = prevIndex
+    loadTrack(playlist.value[prevIndex])
+    play()
   }
 
   // 台词管理
@@ -356,6 +408,7 @@ export const usePlayerStore = defineStore('player', () => {
     activeLyricIndex,
     playlist,
     currentIndex,
+    loopMode,
 
     // 计算属性
     currentLyricSource,
@@ -375,6 +428,7 @@ export const usePlayerStore = defineStore('player', () => {
     removeFromPlaylist,
     playNext,
     playPrev,
+    toggleLoopMode,
     setLyrics,
     addLyricSource,
     setActiveLyric,

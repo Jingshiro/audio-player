@@ -34,6 +34,25 @@
 
       <!-- 控制按钮 -->
       <div class="controls">
+        <button class="control-btn loop-btn" :class="{ active: playerStore.loopMode !== 'none' }"
+          @click="playerStore.toggleLoopMode()" :title="loopModeLabel">
+          <!-- 不循环 -->
+          <svg width="20" height="20" viewBox="0 0 24 24" v-if="playerStore.loopMode === 'none'">
+            <path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
+          </svg>
+          <!-- 列表循环 -->
+          <svg width="20" height="20" viewBox="0 0 24 24" v-else-if="playerStore.loopMode === 'list'">
+            <path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
+          </svg>
+          <!-- 单曲循环 -->
+          <svg width="20" height="20" viewBox="0 0 24 24" v-else-if="playerStore.loopMode === 'single'">
+            <path fill="currentColor" d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2V9h-1l-2 1v1h1.5v4H13z"/>
+          </svg>
+          <!-- 随机播放 -->
+          <svg width="20" height="20" viewBox="0 0 24 24" v-else>
+            <path fill="currentColor" d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
+          </svg>
+        </button>
         <button class="control-btn" @click="playerStore.playPrev()" title="上一首">
           <svg width="24" height="24" viewBox="0 0 24 24">
             <path fill="currentColor" d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
@@ -266,6 +285,12 @@ const selectedLyricId = ref('')
 const lyricsMode = ref(false)
 function toggleLyricsMode() { lyricsMode.value = !lyricsMode.value }
 
+// 循环模式标签
+const loopModeLabel = computed(() => {
+  const labels = { none: '不循环', list: '列表循环', single: '单曲循环', shuffle: '随机播放' }
+  return labels[playerStore.loopMode] || '不循环'
+})
+
 // 当前音频 ID
 const currentAudioId = computed(() => playerStore.currentTrack?.id || null)
 
@@ -308,17 +333,6 @@ function importLRCContent(text, name) {
   unifiedSubtitlesStore.addSubtitle({ name, content: text, source: 'import' })
 }
 
-onMounted(async () => {
-  // 设置音频元素
-  const audioEl = document.getElementById('global-audio')
-  if (audioEl) {
-    playerStore.setAudioElement(audioEl)
-  }
-  // 加载音频库和台词库
-  await unifiedLibraryStore.loadAll()
-  await unifiedSubtitlesStore.loadAll()
-})
-
 // 键盘快捷键
 function handleKeydown(e) {
   if (e.code === 'Space' && editingIndex.value === -1) {
@@ -328,6 +342,12 @@ function handleKeydown(e) {
 }
 
 onMounted(() => {
+  // 设置音频元素
+  const audioEl = document.getElementById('global-audio')
+  if (audioEl) {
+    playerStore.setAudioElement(audioEl)
+  }
+  // 注册键盘事件
   document.addEventListener('keydown', handleKeydown)
 })
 
@@ -844,6 +864,27 @@ function removeLine(index) {
 .play-btn:hover {
   transform: scale(1.1);
   box-shadow: 0 12px 35px var(--accent-glow);
+}
+
+/* 循环模式按钮 */
+.loop-btn {
+  position: relative;
+}
+
+.loop-btn.active {
+  color: var(--accent-primary);
+}
+
+.loop-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent-primary);
 }
 
 /* 音量控制 */

@@ -1,7 +1,9 @@
 const express = require('express')
 const { spawn } = require('child_process')
 
+const { requireAuth } = require('../middleware/auth')
 const router = express.Router()
+router.use(requireAuth)
 
 // 压缩音频：mono 16kHz 32kbps mp3，语音识别够用，体积降 90%+
 function compressAudio(inputBuffer) {
@@ -89,7 +91,7 @@ router.post('/stt', async (req, res) => {
   const startTime = Date.now()
 
   console.log('[AI/STT] ===== 收到请求 =====')
-  console.log('[AI/STT] baseUrl:', baseUrl)
+  console.log('[AI/STT] baseUrl:', baseUrl ? new URL(baseUrl).hostname : 'N/A')
   console.log('[AI/STT] model:', model)
   console.log('[AI/STT] audioFormat:', audioFormat)
   console.log('[AI/STT] audioBase64 length:', audioBase64?.length)

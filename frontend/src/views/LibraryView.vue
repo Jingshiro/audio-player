@@ -94,6 +94,10 @@
       <div class="empty-state" v-if="unifiedLibraryStore.filteredFiles.length === 0">
         <svg viewBox="0 0 24 24"><path fill="currentColor" d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 12H6v-2h8v2zm4-4H6v-2h12v2z"/></svg>
         <p>音频库为空</p>
+        <div class="empty-actions">
+          <button class="btn-primary" @click="triggerImport">导入本地音频</button>
+          <button class="btn-secondary" v-if="serverAvailable" @click="triggerServerUpload">上传到服务器</button>
+        </div>
       </div>
     </div>
 
@@ -150,6 +154,9 @@
       <div class="empty-state" v-else>
         <svg viewBox="0 0 24 24"><path fill="currentColor" d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
         <p>台词库为空</p>
+        <div class="empty-actions">
+          <button class="btn-primary" @click="createNewSubtitle">新建台词</button>
+        </div>
       </div>
     </div>
 
@@ -165,7 +172,8 @@
       </div>
       <div class="form-group">
         <label>内容</label>
-        <textarea class="textarea" v-model="editingSubtitle.content" rows="10"></textarea>
+        <textarea class="textarea" v-model="editingSubtitle.content" rows="10"
+          placeholder="[00:00.00]第一行歌词&#10;[00:05.00]第二行歌词&#10;[00:10.00]第三行歌词"></textarea>
       </div>
       <template #footer>
         <button class="btn-secondary" @click="showEditModal = false">取消</button>
@@ -182,7 +190,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLibraryStore } from '../stores/library'
 import { useSubtitlesStore } from '../stores/subtitles'
@@ -216,7 +224,7 @@ let searchTimer = null
 function onSearch() {
   clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
-    // 搜索直接使用本地 ref, filteredSubtitles 计算属性会自动响应
+    unifiedLibraryStore.setSearchQuery(searchQuery.value)
   }, 200)
 }
 
@@ -280,6 +288,12 @@ onMounted(async () => {
   await unifiedLibraryStore.loadAll()
   await unifiedSubtitlesStore.loadAll()
   serverAvailable.value = await checkBackend()
+})
+
+// 切换 tab 时重置搜索
+watch(activeTab, () => {
+  searchQuery.value = ''
+  unifiedLibraryStore.setSearchQuery('')
 })
 
 onUnmounted(() => {
@@ -446,13 +460,27 @@ function editSubtitle(sub) {
   showEditModal.value = true
 }
 
+// 新建台词
+function createNewSubtitle() {
+  editingSubtitle.value = { id: null, name: '新台词', content: '' }
+  showEditModal.value = true
+}
+
 async function saveSubtitleEdit() {
   if (editingSubtitle.value) {
     try {
-      await unifiedSubtitlesStore.updateSubtitle(editingSubtitle.value.id, {
-        name: editingSubtitle.value.name,
-        content: editingSubtitle.value.content
-      })
+      if (editingSubtitle.value.id) {
+        await unifiedSubtitlesStore.updateSubtitle(editingSubtitle.value.id, {
+          name: editingSubtitle.value.name,
+          content: editingSubtitle.value.content
+        })
+      } else {
+        await unifiedSubtitlesStore.addSubtitle({
+          name: editingSubtitle.value.name,
+          content: editingSubtitle.value.content,
+          source: 'local'
+        })
+      }
       showEditModal.value = false
       toastRef.value?.success('台词已保存')
     } catch (err) {
@@ -727,6 +755,12 @@ async function deleteSubtitle(sub) {
   height: 64px;
   fill: var(--text-dim);
   margin-bottom: 16px;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
 }
 
 /* 表单组 */

@@ -5,7 +5,9 @@ const fs = require('fs')
 const { v4: uuidv4 } = require('uuid')
 const { getDb } = require('../db/init')
 
+const { requireAuth } = require('../middleware/auth')
 const router = express.Router()
+router.use(requireAuth)
 
 // Multer config
 const uploadDir = path.resolve(process.env.UPLOAD_DIR || './data/audio')

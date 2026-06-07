@@ -1,21 +1,21 @@
 const express = require('express')
 const crypto = require('crypto')
+const bcrypt = require('bcryptjs')
 const { getDb } = require('../db/init')
 const { generateToken, addToken, removeToken, requireAuth } = require('../middleware/auth')
 
 const router = express.Router()
 
-// 密码哈希（简单 SHA256，够用了）
+const SALT_ROUNDS = 10
+
+// 密码哈希（bcrypt，带盐）
 function hashPassword(password) {
-  return crypto.createHash('sha256').update(password).digest('hex')
+  return bcrypt.hashSync(password, SALT_ROUNDS)
 }
 
-// 防时序攻击的安全比较
-function safeCompare(a, b) {
-  const bufA = Buffer.from(a)
-  const bufB = Buffer.from(b)
-  if (bufA.length !== bufB.length) return false
-  return crypto.timingSafeEqual(bufA, bufB)
+// 密码验证（bcrypt 内部做常量时间比较，防时序攻击）
+function comparePassword(password, hash) {
+  return bcrypt.compareSync(password, hash)
 }
 
 // 初始化默认密码（如果数据库里没有）
@@ -47,7 +47,7 @@ router.post('/login', (req, res) => {
     const db = getDb()
     const stored = db.prepare("SELECT value FROM settings WHERE key = 'auth_password'").get()
 
-    if (!stored || !safeCompare(stored.value, hashPassword(password))) {
+    if (!stored || !comparePassword(password, stored.value)) {
       return res.status(401).json({ error: '密码错误' })
     }
 
@@ -102,7 +102,7 @@ router.put('/password', requireAuth, (req, res) => {
     const db = getDb()
     const stored = db.prepare("SELECT value FROM settings WHERE key = 'auth_password'").get()
 
-    if (!stored || stored.value !== hashPassword(oldPassword)) {
+    if (!stored || !comparePassword(oldPassword, stored.value)) {
       return res.status(401).json({ error: '旧密码错误' })
     }
 
