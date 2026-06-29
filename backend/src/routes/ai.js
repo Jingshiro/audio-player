@@ -1,46 +1,68 @@
 const express = require('express')
 const { spawn } = require('child_process')
+const fs = require('fs')
+const os = require('os')
+const path = require('path')
+const crypto = require('crypto')
 
 const { requireAuth } = require('../middleware/auth')
 const router = express.Router()
 router.use(requireAuth)
 
 // 压缩音频：mono 16kHz 32kbps mp3，语音识别够用，体积降 90%+
+// 使用临时文件而非 pipe，因为 m4a/mp4 等容器格式需要 seek 读取 moov atom，pipe 不支持
 function compressAudio(inputBuffer) {
+  const tmpDir = os.tmpdir()
+  const id = crypto.randomBytes(8).toString('hex')
+  const inputPath = path.join(tmpDir, `stt-in-${id}`)
+  const outputPath = path.join(tmpDir, `stt-out-${id}.mp3`)
+
   return new Promise((resolve, reject) => {
-    const ffmpeg = spawn('ffmpeg', [
-      '-i', 'pipe:0',
-      '-ac', '1',           // mono
-      '-ar', '16000',       // 16kHz sample rate
-      '-b:a', '32k',        // 32kbps bitrate
-      '-f', 'mp3',          // output mp3
-      'pipe:1'              // stdout
-    ])
-    const chunks = []
-    let finished = false
-    ffmpeg.stdout.on('data', (chunk) => chunks.push(chunk))
-    ffmpeg.stdout.on('end', () => {
-      if (!finished) { finished = true; clearTimeout(timer); resolve(Buffer.concat(chunks)) }
-    })
-    ffmpeg.on('error', (err) => { if (!finished) { finished = true; clearTimeout(timer); reject(err) } })
-    ffmpeg.on('exit', (code) => {
-      if (!finished) {
-        finished = true
-        clearTimeout(timer)
-        if (code !== 0) reject(new Error(`ffmpeg exited with code ${code}`))
-        else resolve(Buffer.concat(chunks))
+    fs.writeFile(inputPath, inputBuffer, (writeErr) => {
+      if (writeErr) return reject(writeErr)
+
+      const ffmpeg = spawn('ffmpeg', [
+        '-y',
+        '-i', inputPath,
+        '-ac', '1',           // mono
+        '-ar', '16000',       // 16kHz sample rate
+        '-b:a', '32k',        // 32kbps bitrate
+        '-f', 'mp3',          // output mp3
+        outputPath
+      ])
+
+      let finished = false
+      const cleanup = () => {
+        fs.unlink(inputPath, () => {})
+        fs.unlink(outputPath, () => {})
       }
+
+      ffmpeg.on('error', (err) => {
+        if (!finished) { finished = true; clearTimeout(timer); cleanup(); reject(err) }
+      })
+      ffmpeg.on('exit', (code) => {
+        if (!finished) {
+          finished = true
+          clearTimeout(timer)
+          if (code !== 0) { cleanup(); reject(new Error(`ffmpeg exited with code ${code}`)); return }
+          fs.readFile(outputPath, (readErr, data) => {
+            cleanup()
+            if (readErr) reject(readErr)
+            else resolve(data)
+          })
+        }
+      })
+
+      // 60秒超时
+      const timer = setTimeout(() => {
+        if (!finished) {
+          finished = true
+          ffmpeg.kill()
+          cleanup()
+          reject(new Error('ffmpeg 压缩超时'))
+        }
+      }, 60000)
     })
-    ffmpeg.stdin.write(inputBuffer)
-    ffmpeg.stdin.end()
-    // 60秒超时
-    const timer = setTimeout(() => {
-      if (!finished) {
-        finished = true
-        ffmpeg.kill()
-        reject(new Error('ffmpeg 压缩超时'))
-      }
-    }, 60000)
   })
 }
 
