@@ -96,6 +96,9 @@ export const useUnifiedLibraryStore = defineStore('unifiedLibrary', () => {
     return unified
   }
 
+  // 服务器音频 blob URL 缓存
+  const blobUrlCache = new Map()
+
   // 获取音频（根据来源）
   async function getAudioWithUrl(id) {
     const audio = audioFiles.value.find(f => f.id === id)
@@ -105,11 +108,28 @@ export const useUnifiedLibraryStore = defineStore('unifiedLibrary', () => {
       const libraryStore = useLibraryStore()
       return await libraryStore.getAudioFileWithUrl(id)
     } else {
-      // 服务器音频直接返回 URL
-      return {
-        ...audio,
-        url: `/api/audio/${id}/stream`
+      // 服务器音频：带 auth 下载为 blob，创建 object URL
+      if (blobUrlCache.has(id)) {
+        return { ...audio, url: blobUrlCache.get(id) }
       }
+      const headers = {}
+      const token = getAuthToken()
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const response = await fetch(`/api/audio/${id}/stream`, { headers })
+      if (!response.ok) throw new Error(`下载失败: HTTP ${response.status}`)
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      blobUrlCache.set(id, url)
+      return { ...audio, url }
+    }
+  }
+
+  // 释放缓存的 blob URL
+  function revokeBlobUrl(id) {
+    const url = blobUrlCache.get(id)
+    if (url) {
+      URL.revokeObjectURL(url)
+      blobUrlCache.delete(id)
     }
   }
 
@@ -217,6 +237,7 @@ export const useUnifiedLibraryStore = defineStore('unifiedLibrary', () => {
     addLocalAudio,
     getAudioWithUrl,
     getAudioBlob,
+    revokeBlobUrl,
     removeAudio,
     setSearchQuery,
     setFilterSource,
