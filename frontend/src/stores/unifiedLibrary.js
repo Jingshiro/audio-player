@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useLibraryStore } from './library'
-import { audioApi, checkBackend } from '../api'
+import { audioApi, checkBackend, getAuthToken } from '../api'
 
 export const useUnifiedLibraryStore = defineStore('unifiedLibrary', () => {
   // 统一音频列表，包含 local 和 server
@@ -125,7 +125,10 @@ export const useUnifiedLibraryStore = defineStore('unifiedLibrary', () => {
     } else {
       // 服务器音频：下载后返回 Blob
       try {
-        const response = await fetch(`/api/audio/${id}/stream`)
+        const headers = {}
+        const token = getAuthToken()
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        const response = await fetch(`/api/audio/${id}/stream`, { headers })
         if (!response.ok) throw new Error(`下载失败: HTTP ${response.status}`)
         const blob = await response.blob()
         return blob
